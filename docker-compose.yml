@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # Porta para comunicação AMQP
+      - "15672:15672" # Porta para a interface de gerenciamento web
+    restart: unless-stopped
