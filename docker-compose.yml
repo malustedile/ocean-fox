@@ -8,3 +8,13 @@ services:
       - "5672:5672" # Porta para comunicação AMQP
       - "15672:15672" # Porta para a interface de gerenciamento web
     restart: unless-stopped
+  reserva:
+    build:
+      context: ./reserva
+      dockerfile: Dockerfile
+    container_name: reserva-service
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./reserva:/app
+    restart: unless-stopped
