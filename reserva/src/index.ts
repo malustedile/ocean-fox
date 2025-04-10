@@ -1,9 +1,14 @@
 import { Elysia } from "elysia";
 import { MongoClient } from "mongodb";
+import amqp from "amqplib";
 
 const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
 const db = client.db("ocean-fox");
 const destinos = db.collection("destinos");
+
+const rabbit = await amqp.connect("amqp://localhost");
+const channel = await rabbit.createChannel();
+await channel.assertQueue("reserva-criada", { durable: true });
 
 await client.connect();
 
@@ -21,6 +26,7 @@ interface destinosDto {
 }
 
 interface reservaDto {
+  destino: string;
   dataEmbarque: string;
   numeroPassageiros: number;
   numeroCabines: number;
@@ -30,7 +36,7 @@ const app = new Elysia()
   .get("/", () => "Hello Elysia")
 
   // Endpoint de cadastro
-  .post("/destinos", async (body: destinosDto) => {
+  .post("/destinos", async ({ body }: { body: destinosDto }) => {
     const { nome, descricao } = body ?? {};
 
     if (!nome || !descricao) {
@@ -111,13 +117,40 @@ const app = new Elysia()
   })
 
   // Endpoint de efetuar reserva
-  .post("/destinos/reservar", async (body: reservaDto) => {
-    const { dataEmbarque, numeroPassageiros, numeroCabines } = body ?? {};
-    if (!dataEmbarque || !numeroPassageiros || !numeroCabines) {
+  .post("/destinos/reservar", async ({ body }: { body: reservaDto }) => {
+    const { destino, dataEmbarque, numeroPassageiros, numeroCabines } =
+      body ?? {};
+
+    if (!destino || !dataEmbarque || !numeroPassageiros || !numeroCabines) {
       return {
-        erro: "Campos 'dataEmbarque', 'numeroPassageiros' e 'numeroCabines' são obrigatórios.",
+        erro: "Campos 'destino', 'dataEmbarque', 'numeroPassageiros' e 'numeroCabines' são obrigatórios.",
       };
     }
+
+    // 🔗 Simulação do link de pagamento (mock)
+    const linkPagamento = `https://pagamento.fake/checkout?token=${crypto.randomUUID()}`;
+
+    // 📤 Publica na fila
+    const reservaPayload = {
+      destino,
+      dataEmbarque,
+      numeroPassageiros,
+      numeroCabines,
+      linkPagamento,
+      status: "AGUARDANDO_PAGAMENTO",
+      criadoEm: new Date().toISOString(),
+    };
+
+    channel.sendToQueue(
+      "reserva-criada",
+      Buffer.from(JSON.stringify(reservaPayload)),
+      { persistent: true }
+    );
+
+    return {
+      mensagem: "Reserva registrada. Link de pagamento gerado.",
+      linkPagamento,
+    };
   })
 
   .listen(3000);
