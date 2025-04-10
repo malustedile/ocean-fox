@@ -8,13 +8,38 @@ services:
       - "5672:5672" # Porta para comunicação AMQP
       - "15672:15672" # Porta para a interface de gerenciamento web
     restart: unless-stopped
-  reserva:
-    build:
-      context: ./reserva
-      dockerfile: Dockerfile
-    container_name: reserva-service
+
+  mongodb:
+    image: mongo:latest
+    container_name: meu_mongodb
     ports:
-      - "3000:3000"
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: exemplo123
     volumes:
-      - ./reserva:/app
-    restart: unless-stopped
+      - mongodb_data:/data/db
+  # reserva:
+  #   build:
+  #     context: ./reserva
+  #     dockerfile: Dockerfile
+  #   container_name: reserva-service
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./reserva:/app
+  #   restart: unless-stopped
+
+  # pagamento:
+  #   build:
+  #     context: ./pagamento
+  #     dockerfile: Dockerfile
+  #   container_name: pagamento-service
+  #   ports:
+  #     - "3001:3001"
+  #   volumes:
+  #     - ./pagamento:/app
+  #   restart: unless-stopped
+
+volumes:
+  mongodb_data:

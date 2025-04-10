@@ -10,7 +10,7 @@ COPY . .
 RUN bun install
 
 # Expõe a porta
-EXPOSE 3000
+EXPOSE 3001
 
 # Roda o app
 CMD ["bun", "src/index.ts"]
