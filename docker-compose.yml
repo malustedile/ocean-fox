@@ -41,5 +41,16 @@ services:
   #     - ./pagamento:/app
   #   restart: unless-stopped
 
+  # bilhete:
+  #   build:
+  #     context: ./bilhete
+  #     dockerfile: Dockerfile
+  #   container_name: bilhete-service
+  #   ports:
+  #     - "3002:3002"
+  #   volumes:
+  #     - ./bilhete:/app
+  #   restart: unless-stopped
+
 volumes:
   mongodb_data:

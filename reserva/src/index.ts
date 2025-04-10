@@ -10,6 +10,21 @@ const rabbit = await amqp.connect("amqp://localhost");
 const channel = await rabbit.createChannel();
 await channel.assertQueue("reserva-criada", { durable: true });
 
+const channelPagamentoAprovado = await rabbit.createChannel();
+await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
+  durable: true,
+});
+
+const channelPagamentoRecusado = await rabbit.createChannel();
+await channelPagamentoRecusado.assertQueue("pagamento-recusado", {
+  durable: true,
+});
+
+const channelBilheteGerado = await rabbit.createChannel();
+await channelBilheteGerado.assertQueue("bilhete-gerado", {
+  durable: true,
+});
+
 await client.connect();
 
 interface destinosDto {
