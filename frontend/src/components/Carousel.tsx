@@ -11,8 +11,9 @@ import {
 import { CarouselItem } from "./CarouselItem";
 import { TbBuildingBurjAlArab } from "react-icons/tb";
 import { IoSnowOutline } from "react-icons/io5";
-import { destinosPorCategoria } from "../api/destinos";
+import { destinosPorCategoria, puxarDestinos } from "../api/destinos";
 import { useEffect, useState } from "react";
+import { FilteredTrips, Trip } from "./FilteredTrips";
 
 export const iconsCategorias = {
   Brasil: <GiBrazilFlag size={30} />,
@@ -33,14 +34,21 @@ interface Destino {
 }
 
 export const Carousel = () => {
+  const [loading, setLoading] = useState(false);
   const [destinos, setDestinos] = useState([]);
+  const [destinosDeCategoria, setDestinosDeCategoria] = useState<Trip[]>([]);
 
   const categoriasDeDestinos = async () => {
     const response = await destinosPorCategoria();
     setDestinos(response);
   };
 
-  const handleClickItem = (categoria: keyof typeof iconsCategorias) => {};
+  const handleClickItem = async (categoria: keyof typeof iconsCategorias) => {
+    setLoading(true);
+    const response = await puxarDestinos({ categoria });
+    setDestinosDeCategoria(response);
+    setLoading(false);
+  };
 
   useEffect(() => {
     const fetchCategorias = async () => {
@@ -66,6 +74,20 @@ export const Carousel = () => {
           />
         ))}
       </div>
+      {loading && <div className="loading loading-spinner"></div>}
+      {destinosDeCategoria.length != 0 && (
+        <div className="flex flex-col w-full h-full p-4 gap-4">
+          <div>
+            <h2 className="text-slate-700 text-lg font-medium">
+              Destinos disponíveis
+            </h2>
+            <div className="text-slate-500 text-sm">
+              {destinosDeCategoria.length} destinos encontrados
+            </div>
+          </div>
+          <FilteredTrips filter={destinosDeCategoria} />
+        </div>
+      )}
     </div>
   );
 };

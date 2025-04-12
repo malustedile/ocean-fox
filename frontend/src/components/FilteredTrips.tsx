@@ -3,7 +3,7 @@ import { iconsCategorias } from "./Carousel";
 import { Tag } from "./Tag";
 import { LuShip } from "react-icons/lu";
 
-interface Trip {
+export interface Trip {
   nome: string;
   categoria: keyof typeof iconsCategorias;
   descricao: {
@@ -32,11 +32,11 @@ const coresCategorias = {
 
 export const FilteredTrips = ({ filter }: { filter: Trip[] }) => {
   return (
-    <div className="flex flex-wrap h-full w-full gap-4 items-center justify-center overflow-x-hidden">
+    <div className="flex flex-wrap h-full w-full gap-4 items-center justify-start overflow-x-hidden">
       {filter.map((trip: Trip, index: number) => (
         <div
           key={index}
-          className="flex flex-col bg-white rounded-xl p-3 shadow-md w-[300px] h-[240px]"
+          className="flex flex-col bg-white rounded-xl p-3 w-[300px] h-[240px] hover:cursor-pointer hover:bg-slate-50 border border-slate-300"
         >
           <div className="flex flex-row justify-between">
             <div className="text-slate-500 text-xs">

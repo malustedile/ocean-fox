@@ -24,7 +24,7 @@ export const CarouselItem = ({
 
   return (
     <div className="carousel-item" onClick={handleClick}>
-      <div className="flex flex-col w-[200px] h-[130px] bg-white rounded-xl p-6 border border-slate-300 gap-3">
+      <div className="flex flex-col w-[200px] h-[130px] bg-white rounded-xl p-6 border border-slate-300 gap-3 hover:cursor-pointer hover:bg-slate-50">
         <div className="flex w-full justify-between items-start">
           <div>{icon}</div>
           <Tag tag={tag} tagColor={tagColor} />

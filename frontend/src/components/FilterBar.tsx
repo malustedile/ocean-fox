@@ -12,7 +12,7 @@ export const FilterBar = ({ setFilter }: FilterBarProps) => {
   const [embarque, setEmbarque] = useState("");
 
   const handleFilter = async () => {
-    const response = await puxarDestinos(destino, mes, embarque);
+    const response = await puxarDestinos({ destino, mes, embarque });
     setFilter(response);
   };
 
