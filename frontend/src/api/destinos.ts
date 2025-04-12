@@ -5,12 +5,17 @@ const client = axios.create({
   withCredentials: true,
 });
 
-export const puxarDestinos = async (
-  destino?: string,
-  mes?: string,
-  embarque?: string,
-  categoria?: string
-) => {
+export const puxarDestinos = async ({
+  destino,
+  mes,
+  embarque,
+  categoria,
+}: {
+  destino?: string;
+  mes?: string;
+  embarque?: string;
+  categoria?: string;
+}) => {
   const response = await client.post(`/destinos/buscar`, {
     destino,
     mes,
