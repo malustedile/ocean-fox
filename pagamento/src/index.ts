@@ -13,18 +13,27 @@ interface reservaPayload {
   criadoEm: string;
 }
 
-const rabbit = await amqp.connect("amqp://localhost");
+const reservaExchange = "reserva-criada-exc";
+
+const rabbit = await amqp.connect("amqp://rabbitmq");
 const channelReserva = await rabbit.createChannel();
 const channelPagamentoAprovado = await rabbit.createChannel();
 const channelPagamentoRecusado = await rabbit.createChannel();
 
-await channelReserva.assertQueue("reserva-criada", { durable: true });
+await channelReserva.assertExchange(reservaExchange, "fanout", {
+  durable: false,
+});
+const reservaQueue = await channelReserva.assertQueue("reserva-criada", {
+  durable: true,
+});
 await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
   durable: true,
 });
 await channelPagamentoRecusado.assertQueue("pagamento-recusado", {
   durable: true,
 });
+
+await channelReserva.bindQueue(reservaQueue.queue, reservaExchange, "");
 
 channelReserva.consume(
   "reserva-criada",

@@ -2,13 +2,19 @@ import { Elysia } from "elysia";
 import { MongoClient } from "mongodb";
 import amqp from "amqplib";
 
-const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
+const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
 const db = client.db("ocean-fox");
 const destinos = db.collection("destinos");
 
-const rabbit = await amqp.connect("amqp://localhost");
+const reservaExchange = "reserva-criada-exc";
+
+const rabbit = await amqp.connect("amqp://rabbitmq");
 const channel = await rabbit.createChannel();
 await channel.assertQueue("reserva-criada", { durable: true });
+
+await channel.assertExchange(reservaExchange, "fanout", {
+  durable: false,
+});
 
 const channelPagamentoAprovado = await rabbit.createChannel();
 await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
@@ -156,8 +162,9 @@ const app = new Elysia()
       criadoEm: new Date().toISOString(),
     };
 
-    channel.sendToQueue(
-      "reserva-criada",
+    channel.publish(
+      reservaExchange,
+      "",
       Buffer.from(JSON.stringify(reservaPayload)),
       { persistent: true }
     );

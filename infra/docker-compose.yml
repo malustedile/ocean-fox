@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.0-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # Porta para comunicação AMQP
+      - "15672:15672" # Porta para a interface de gerenciamento web
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:latest
+    container_name: meu_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: exemplo123
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  mongodb_data:

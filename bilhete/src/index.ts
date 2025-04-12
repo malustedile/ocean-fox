@@ -26,7 +26,7 @@ interface bilhete {
   criadoEm: string;
 }
 
-const rabbit = await amqp.connect("amqp://localhost");
+const rabbit = await amqp.connect("amqp://rabbitmq");
 const channelPagamentoAprovado = await rabbit.createChannel();
 const channelBilheteGerado = await rabbit.createChannel();
 

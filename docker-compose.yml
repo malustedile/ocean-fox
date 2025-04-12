@@ -19,38 +19,48 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: exemplo123
     volumes:
       - mongodb_data:/data/db
-  # reserva:
-  #   build:
-  #     context: ./reserva
-  #     dockerfile: Dockerfile
-  #   container_name: reserva-service
-  #   ports:
-  #     - "3000:3000"
-  #   volumes:
-  #     - ./reserva:/app
-  #   restart: unless-stopped
 
-  # pagamento:
-  #   build:
-  #     context: ./pagamento
-  #     dockerfile: Dockerfile
-  #   container_name: pagamento-service
-  #   ports:
-  #     - "3001:3001"
-  #   volumes:
-  #     - ./pagamento:/app
-  #   restart: unless-stopped
+  reserva:
+    build:
+      context: ./reserva
+      dockerfile: Dockerfile
+    container_name: reserva-service
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./reserva:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
 
-  # bilhete:
-  #   build:
-  #     context: ./bilhete
-  #     dockerfile: Dockerfile
-  #   container_name: bilhete-service
-  #   ports:
-  #     - "3002:3002"
-  #   volumes:
-  #     - ./bilhete:/app
-  #   restart: unless-stopped
+  pagamento:
+    build:
+      context: ./pagamento
+      dockerfile: Dockerfile
+    container_name: pagamento-service
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./pagamento:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
+
+  bilhete:
+    build:
+      context: ./bilhete
+      dockerfile: Dockerfile
+    container_name: bilhete-service
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./bilhete:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
 
 volumes:
   mongodb_data:
