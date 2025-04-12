@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { MongoClient, ObjectId } from "mongodb";
+import { MongoClient } from "mongodb";
 import amqp from "amqplib";
 
 const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
@@ -34,8 +34,22 @@ await channelBilheteGerado.assertQueue("bilhete-gerado", {
 
 await client.connect();
 
+enum Categorias {
+  BRAZIL = "Brasil",
+  SOUTH_AMERICA = "América do Sul",
+  CARIBBEAN = "Caribe",
+  NORTH_AMERICA = "América do Norte",
+  AFRICA = "África",
+  MIDDLE_EAST = "Oriente Médio",
+  ASIA = "Ásia",
+  MEDITERRANEAN = "Mediterrâneo",
+  SCANDINAVIA = "Escandinávia",
+  OCEANIA = "Oceania",
+}
+
 interface destinosDto {
   nome: string;
+  categoria: Categorias;
   descricao: {
     datasDisponiveis: string[];
     navio: string;
@@ -62,6 +76,13 @@ interface reservaDto {
   numeroCabines: number;
 }
 
+interface filtrosDto {
+  destino?: string;
+  mes?: string;
+  embarque?: string;
+  categoria?: Categorias;
+}
+
 const app = new Elysia()
   .use(authGuard())
   .get("/", () => {
@@ -80,9 +101,11 @@ const app = new Elysia()
   // Endpoint de cadastro
 
   .post("/destinos", async ({ body }) => {
-    const { nome, descricao }: destinosDto = (body as any) ?? {};
-    if (!nome || !descricao) {
-      return { erro: "Campos 'nome' e 'descricao' são obrigatórios." };
+    const { nome, categoria, descricao } = (body as any) ?? {};
+    if (!nome || !descricao || !categoria) {
+      return {
+        erro: "Campos 'nome', 'descricao' e 'categoria' são obrigatórios.",
+      };
     }
 
     const {
@@ -109,6 +132,7 @@ const app = new Elysia()
 
     const resultado = await destinos.insertOne({
       nome,
+      categoria,
       descricao: {
         datasDisponiveis,
         navio,
@@ -127,8 +151,8 @@ const app = new Elysia()
   })
 
   // Endpoint de consulta por nome, mês e porto de embarque
-  .get("/destinos/buscar", async ({ query }) => {
-    const { destino, mes, embarque } = query;
+  .post("/destinos/buscar", async ({ body }: { body: filtrosDto }) => {
+    const { destino, mes, embarque } = body;
 
     const filtro: any = {};
 
@@ -154,6 +178,19 @@ const app = new Elysia()
     }
 
     const resultados = await destinos.find(filtro).toArray();
+
+    return resultados;
+  })
+
+  .get("/destinos-por-categoria", async () => {
+    const categorias = Object.values(Categorias);
+
+    const resultados = await Promise.all(
+      categorias.map(async (categoria) => {
+        const count = await destinos.countDocuments({ categoria });
+        return { categoria, quantidade: count };
+      })
+    );
 
     return resultados;
   })
