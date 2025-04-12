@@ -27,8 +27,22 @@ await channelBilheteGerado.assertQueue("bilhete-gerado", {
 
 await client.connect();
 
+enum Categorias {
+  BRAZIL = "Brasil",
+  SOUTH_AMERICA = "América do Sul",
+  CARIBBEAN = "Caribe",
+  NORTH_AMERICA = "América do Norte",
+  AFRICA = "África",
+  MIDDLE_EAST = "Oriente Médio",
+  ASIA = "Ásia",
+  MEDITERRANEAN = "Mediterrâneo",
+  SCANDINAVIA = "Escandinávia",
+  OCEANIA = "Oceania",
+}
+
 interface destinosDto {
   nome: string;
+  categoria: Categorias;
   descricao: {
     datasDisponiveis: string[];
     navio: string;
@@ -52,10 +66,12 @@ const app = new Elysia()
 
   // Endpoint de cadastro
   .post("/destinos", async ({ body }: { body: destinosDto }) => {
-    const { nome, descricao } = body ?? {};
+    const { nome, categoria, descricao } = body ?? {};
 
-    if (!nome || !descricao) {
-      return { erro: "Campos 'nome' e 'descricao' são obrigatórios." };
+    if (!nome || !descricao || !categoria) {
+      return {
+        erro: "Campos 'nome', 'categoria' e 'descricao' são obrigatórios.",
+      };
     }
 
     const {
@@ -82,6 +98,7 @@ const app = new Elysia()
 
     const resultado = await destinos.insertOne({
       nome,
+      categoria,
       descricao: {
         datasDisponiveis,
         navio,
