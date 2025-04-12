@@ -179,7 +179,7 @@ const app = new Elysia()
     }
 
     if (categoria) {
-      filtro.categoria = categoria;
+      filtro["categoria"] = { $regex: categoria, $options: "i" };
     }
 
     const resultados = await destinos.find(filtro).toArray();
