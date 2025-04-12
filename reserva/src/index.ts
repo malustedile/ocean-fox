@@ -84,7 +84,6 @@ interface filtrosDto {
 }
 
 const app = new Elysia()
-  .use(authGuard())
   .get("/", () => {
     return "Hello Elysia";
   })
