@@ -1,11 +1,10 @@
 import "./App.css";
 import { FilterBar } from "./components/FilterBar";
 import { NavBar } from "./components/NavBar";
-import { Carousel } from "./components/Carousel";
 import { useEffect, useState } from "react";
-import { FilteredTrips } from "./components/FilteredTrips";
 import axios from "axios";
 import { MinhasReservas } from "./screens/MinhasReservas";
+import { Itinerarios } from "./screens/Itinerarios";
 
 export enum Screens {
   Itinerarios = "ITINERARIOS",
@@ -25,19 +24,11 @@ function App() {
   const renderPanel = () => {
     switch (activeScreen) {
       case Screens.Itinerarios:
-        return (
-          <div className="flex flex-col overflow-y-scroll">
-            {filter ? <FilteredTrips filter={filter} /> : <Carousel />}
-          </div>
-        );
+        return <Itinerarios filter={filter} />;
       case Screens.MinhasReservas:
         return <MinhasReservas />;
       default:
-        return (
-          <div className="flex flex-col overflow-y-scroll">
-            {filter ? <FilteredTrips filter={filter} /> : <Carousel />}
-          </div>
-        );
+        return <Itinerarios filter={filter} />;
     }
   };
 

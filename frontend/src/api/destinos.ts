@@ -43,8 +43,6 @@ export const minhasReservas = async () => {
 };
 
 export const reservarViagem = async (reserva: ReservaDto) => {
-  const response = await client.post(`destinos/reservar`, {
-    reserva,
-  });
+  const response = await client.post(`destinos/reservar`, reserva);
   return response.data;
 };
