@@ -24,6 +24,7 @@ export const BookingModal = ({
       dataEmbarque,
       numeroPassageiros,
       numeroCabines,
+      valorTotal: Number(trip.descricao.valorPorPessoa) * numeroPassageiros,
     });
     if (err) return;
   };

@@ -22,7 +22,7 @@ export const MinhasReservas = () => {
             destino={r.destino}
             status={r.status}
             passageiros={r.numeroPassageiros}
-            valor={"9501"}
+            valor={r.valorTotal || "0"}
           />
         ))}
       </div>
@@ -45,6 +45,7 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
   destino,
   status,
   passageiros,
+  valor,
 }) => {
   return (
     <div className="flex justify-between bg-white p-4 px-12 pr-8 rounded-xl relative">
@@ -82,7 +83,12 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
 
         <div>
           <div className="font-bold">Valor:</div>
-          <div className="text-black">R$ 9.539,00</div>
+          <div className="text-black">
+            {new Intl.NumberFormat("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }).format(Number(valor))}
+          </div>
         </div>
       </div>
       {status === "PAGAMENTO_APROVADO" && (

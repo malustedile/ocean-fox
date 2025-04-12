@@ -75,6 +75,7 @@ interface reservaDto {
   dataEmbarque: string;
   numeroPassageiros: number;
   numeroCabines: number;
+  valorTotal: number;
 }
 
 interface filtrosDto {
@@ -201,12 +202,23 @@ const app = new Elysia()
 
   // Endpoint de efetuar reserva
   .post("/destinos/reservar", async ({ body, cookie }) => {
-    const { destino, dataEmbarque, numeroPassageiros, numeroCabines } =
-      (body as reservaDto) ?? {};
+    const {
+      destino,
+      dataEmbarque,
+      numeroPassageiros,
+      numeroCabines,
+      valorTotal,
+    } = (body as reservaDto) ?? {};
     const sessionId = cookie.sessionId.value;
-    if (!destino || !dataEmbarque || !numeroPassageiros || !numeroCabines) {
+    if (
+      !destino ||
+      !dataEmbarque ||
+      !numeroPassageiros ||
+      !numeroCabines ||
+      !valorTotal
+    ) {
       return {
-        erro: "Campos 'destino', 'dataEmbarque', 'numeroPassageiros' e 'numeroCabines' são obrigatórios.",
+        erro: "Campos 'destino', 'dataEmbarque', 'numeroPassageiros', 'numeroCabines' e 'valorTotal' são obrigatórios.",
       };
     }
 
@@ -220,6 +232,7 @@ const app = new Elysia()
       dataEmbarque,
       numeroPassageiros,
       numeroCabines,
+      valorTotal,
       linkPagamento,
       status: "AGUARDANDO_PAGAMENTO",
       bilhete: null,

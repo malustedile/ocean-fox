@@ -10,6 +10,7 @@ export interface ReservaDto {
   dataEmbarque: string;
   numeroPassageiros: number;
   numeroCabines: number;
+  valorTotal: number;
 }
 
 export const puxarDestinos = async ({
