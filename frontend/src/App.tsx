@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { FilteredTrips } from "./components/FilteredTrips";
 import axios from "axios";
 import { MinhasReservas } from "./screens/MinhasReservas";
+import { Promocoes } from "./screens/Promocoes";
 
 export enum Screens {
   Itinerarios = "ITINERARIOS",
@@ -32,6 +33,8 @@ function App() {
         );
       case Screens.MinhasReservas:
         return <MinhasReservas />;
+      case Screens.InscrevaSe:
+        return <Promocoes />;
       default:
         return (
           <div className="flex flex-col overflow-y-scroll">

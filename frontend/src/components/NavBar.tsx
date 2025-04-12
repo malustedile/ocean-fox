@@ -1,5 +1,4 @@
 import React from "react";
-import { minhasReservas } from "../api/destinos";
 import { Screens } from "../App";
 
 interface NavBarProps {
@@ -8,11 +7,6 @@ interface NavBarProps {
 }
 
 export const NavBar: React.FC<NavBarProps> = ({ activeScreen, setScreen }) => {
-  const handleMyReservationsClick = async () => {
-    const res = await minhasReservas();
-    console.log(res);
-  };
-
   const classNameButtons =
     "hover:text-[#007090] hover:bg-[#cce2e9] hover:cursor-pointer px-4 py-1 rounded-full";
 
@@ -40,7 +34,12 @@ export const NavBar: React.FC<NavBarProps> = ({ activeScreen, setScreen }) => {
         Minhas Reservas
       </div>
       <div>•</div>
-      <div className={classNameButtons}>Inscreva-se</div>
+      <div
+        className={classNameButtons}
+        onClick={() => setScreen(Screens.InscrevaSe)}
+      >
+        Promoçoes
+      </div>
     </div>
   );
 };
