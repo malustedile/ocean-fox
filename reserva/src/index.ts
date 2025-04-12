@@ -91,12 +91,11 @@ const app = new Elysia()
   })
 
   .get("/minhas-reservas", async ({ cookie }) => {
-    const a = await reservas
+    return await reservas
       .find({
         sessionId: cookie.sessionId.value,
       })
       .toArray();
-    console.log(a);
   })
 
   // Endpoint de cadastro

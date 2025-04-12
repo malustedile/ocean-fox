@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { MongoClient, ObjectId } from "mongodb";
 import amqp from "amqplib";
+import cors from "@elysiajs/cors";
 
 const reservaExchange = "reserva-criada-exc";
 
@@ -32,6 +33,7 @@ channel.consume(
 );
 
 const app = new Elysia()
+  .use(cors())
   .get("/", async () => {})
 
   .get("/session", async ({ cookie }) => {
@@ -58,7 +60,10 @@ const app = new Elysia()
         value: sessionId,
         httpOnly: true,
         path: "/",
-        maxAge: 60 * 60 * 24 * 7, // 7 dias
+        domain: "localhost",
+        sameSite: "none",
+        secure: true,
+        maxAge: 60 * 60 * 24 * 365, // 1 ano
       });
 
       sessionData = newSession;

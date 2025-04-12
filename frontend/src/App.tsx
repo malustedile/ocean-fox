@@ -2,13 +2,16 @@ import "./App.css";
 import { FilterBar } from "./components/FilterBar";
 import { NavBar } from "./components/NavBar";
 import { Carousel } from "./components/Carousel";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FilteredTrips } from "./components/FilteredTrips";
+import axios from "axios";
 
 function App() {
   const [filter, setFilter] = useState();
 
-  console.log("Filter:", filter);
+  useEffect(() => {
+    axios.get("http://localhost:3005/session", { withCredentials: true });
+  }, []);
 
   return (
     <div className="flex w-screen min-h-screen bg-gray-100 p-4">
