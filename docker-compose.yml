@@ -62,5 +62,19 @@ services:
       - mongodb
     restart: unless-stopped
 
+  session:
+    build:
+      context: ./session
+      dockerfile: Dockerfile
+    container_name: session-service
+    ports:
+      - "3005:3005"
+    volumes:
+      - ./session:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
+
 volumes:
   mongodb_data:

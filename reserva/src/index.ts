@@ -1,10 +1,11 @@
 import { Elysia } from "elysia";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import amqp from "amqplib";
 
 const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
 const db = client.db("ocean-fox");
 const destinos = db.collection("destinos");
+const reservas = db.collection("reservas");
 
 const reservaExchange = "reserva-criada-exc";
 
@@ -46,6 +47,14 @@ interface destinosDto {
   };
 }
 
+const authGuard = () => (app: Elysia) =>
+  app.onBeforeHandle(({ cookie, set }) => {
+    if (!cookie?.sessionId?.value) {
+      set.status = 401;
+      return "Unauthorized";
+    }
+  });
+
 interface reservaDto {
   destino: string;
   dataEmbarque: string;
@@ -54,12 +63,24 @@ interface reservaDto {
 }
 
 const app = new Elysia()
-  .get("/", () => "Hello Elysia")
+  .use(authGuard())
+  .get("/", () => {
+    return "Hello Elysia";
+  })
+
+  .get("/minhas-reservas", async ({ cookie }) => {
+    const a = await reservas
+      .find({
+        sessionId: cookie.sessionId.value,
+      })
+      .toArray();
+    console.log(a);
+  })
 
   // Endpoint de cadastro
-  .post("/destinos", async ({ body }: { body: destinosDto }) => {
-    const { nome, descricao } = body ?? {};
 
+  .post("/destinos", async ({ body }) => {
+    const { nome, descricao }: destinosDto = (body as any) ?? {};
     if (!nome || !descricao) {
       return { erro: "Campos 'nome' e 'descricao' são obrigatórios." };
     }
@@ -138,10 +159,10 @@ const app = new Elysia()
   })
 
   // Endpoint de efetuar reserva
-  .post("/destinos/reservar", async ({ body }: { body: reservaDto }) => {
+  .post("/destinos/reservar", async ({ body, cookie }) => {
     const { destino, dataEmbarque, numeroPassageiros, numeroCabines } =
-      body ?? {};
-
+      (body as reservaDto) ?? {};
+    const sessionId = cookie.sessionId.value;
     if (!destino || !dataEmbarque || !numeroPassageiros || !numeroCabines) {
       return {
         erro: "Campos 'destino', 'dataEmbarque', 'numeroPassageiros' e 'numeroCabines' são obrigatórios.",
@@ -154,24 +175,31 @@ const app = new Elysia()
     // 📤 Publica na fila
     const reservaPayload = {
       destino,
+      sessionId,
       dataEmbarque,
       numeroPassageiros,
       numeroCabines,
       linkPagamento,
       status: "AGUARDANDO_PAGAMENTO",
+      bilhete: null,
       criadoEm: new Date().toISOString(),
     };
+
+    const reserva = await reservas.insertOne(reservaPayload);
 
     channel.publish(
       reservaExchange,
       "",
-      Buffer.from(JSON.stringify(reservaPayload)),
+      Buffer.from(
+        JSON.stringify({ id: reserva.insertedId, ...reservaPayload })
+      ),
       { persistent: true }
     );
 
     return {
       mensagem: "Reserva registrada. Link de pagamento gerado.",
       linkPagamento,
+      reserva,
     };
   })
 

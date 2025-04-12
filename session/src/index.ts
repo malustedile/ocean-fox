@@ -5,11 +5,12 @@ import amqp from "amqplib";
 const reservaExchange = "reserva-criada-exc";
 
 // Conexão com MongoDB
-const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
+const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
 const db = client.db("ocean-fox");
 const sessions = db.collection("sessions");
+const reservas = db.collection("reservas");
 
-const rabbit = await amqp.connect("amqp://localhost");
+const rabbit = await amqp.connect("amqp://rabbitmq");
 const channel = await rabbit.createChannel();
 const reservaQueue = await channel.assertQueue("reserva-criada-session", {
   durable: true,
@@ -31,7 +32,7 @@ channel.consume(
 );
 
 const app = new Elysia()
-  .get("/", () => "Hello Elysia")
+  .get("/", async () => {})
 
   .get("/session", async ({ cookie }) => {
     let sessionId = cookie.sessionId.value;

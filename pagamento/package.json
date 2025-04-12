@@ -9,6 +9,7 @@
     "@types/amqplib": "^0.10.7",
     "amqplib": "^0.10.7",
     "elysia": "latest",
+    "mongodb": "^6.15.0",
     "sshpk": "^1.18.0"
   },
   "devDependencies": {
