@@ -5,6 +5,13 @@ const client = axios.create({
   withCredentials: true,
 });
 
+export interface ReservaDto {
+  destino: string;
+  dataEmbarque: string;
+  numeroPassageiros: number;
+  numeroCabines: number;
+}
+
 export const puxarDestinos = async ({
   destino,
   mes,
@@ -32,5 +39,12 @@ export const destinosPorCategoria = async () => {
 
 export const minhasReservas = async () => {
   const response = await client.get(`/minhas-reservas`);
+  return response.data;
+};
+
+export const reservarViagem = async (reserva: ReservaDto) => {
+  const response = await client.post(`destinos/reservar`, {
+    reserva,
+  });
   return response.data;
 };
