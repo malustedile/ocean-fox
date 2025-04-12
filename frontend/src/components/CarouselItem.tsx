@@ -1,3 +1,5 @@
+import { Tag } from "./Tag";
+
 interface CarouselItemProps {
   title: string;
   subtitle: string;
@@ -18,11 +20,7 @@ export const CarouselItem = ({
       <div className="flex flex-col w-[200px] h-[130px] bg-white rounded-xl p-6 border border-slate-300 gap-3">
         <div className="flex w-full justify-between items-start">
           <div>{icon}</div>
-          {tag && (
-            <div className={`px-2 py-1 rounded-full text-xs ${tagColor}`}>
-              {tag}
-            </div>
-          )}
+          <Tag tag={tag} tagColor={tagColor} />
         </div>
         <div className="flex flex-col w-full">
           <div className="flex w-full items-start text-lg font-medium">

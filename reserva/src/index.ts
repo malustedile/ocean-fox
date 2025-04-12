@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { MongoClient } from "mongodb";
 import amqp from "amqplib";
+import cors from "@elysiajs/cors";
 
 const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
 const db = client.db("ocean-fox");
@@ -61,7 +62,15 @@ interface reservaDto {
   numeroCabines: number;
 }
 
+interface filtrosDto {
+  destino?: string;
+  mes?: string;
+  embarque?: string;
+  categoria?: Categorias;
+}
+
 const app = new Elysia()
+  .use(cors())
   .get("/", () => "Hello Elysia")
 
   // Endpoint de cadastro
@@ -117,8 +126,8 @@ const app = new Elysia()
   })
 
   // Endpoint de consulta por nome, mês e porto de embarque
-  .get("/destinos/buscar", async ({ query }) => {
-    const { destino, mes, embarque } = query;
+  .post("/destinos/buscar", async ({ body }: { body: filtrosDto }) => {
+    const { destino, mes, embarque } = body;
 
     const filtro: any = {};
 
@@ -144,6 +153,19 @@ const app = new Elysia()
     }
 
     const resultados = await destinos.find(filtro).toArray();
+
+    return resultados;
+  })
+
+  .get("/destinos-por-categoria", async () => {
+    const categorias = Object.values(Categorias);
+
+    const resultados = await Promise.all(
+      categorias.map(async (categoria) => {
+        const count = await destinos.countDocuments({ categoria });
+        return { categoria, quantidade: count };
+      })
+    );
 
     return resultados;
   })
