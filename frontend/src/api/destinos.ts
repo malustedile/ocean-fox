@@ -3,12 +3,14 @@ import axios from "axios";
 export const puxarDestinos = async (
   destino?: string,
   mes?: string,
-  embarque?: string
+  embarque?: string,
+  categoria?: string
 ) => {
   const response = await axios.post(`http://localhost:3000/destinos/buscar`, {
     destino,
     mes,
     embarque,
+    categoria,
   });
   return response.data;
 };

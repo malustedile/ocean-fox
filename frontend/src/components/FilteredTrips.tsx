@@ -54,8 +54,7 @@ export const FilteredTrips = ({ filter }: { filter: Trip[] }) => {
             <div className="flex flex-col gap-2">
               <div>
                 <span className="flex flex-row items-center text-slate-500 text-sm gap-2">
-                  <MdOutlinePinDrop size={14} /> {trip.descricao.embarque} -{" "}
-                  {trip.descricao.desembarque}
+                  <MdOutlinePinDrop size={14} /> {trip.descricao.embarque}
                 </span>
                 <span className="flex flex-row items-center text-slate-500 text-sm gap-2">
                   <MdOutlineEventAvailable size={14} />{" "}

@@ -6,7 +6,7 @@ export const NavBar = () => {
       </div>
       <div>•</div>
       <div className="hover:text-[#007090] hover:bg-[#cce2e9] hover:cursor-pointer px-4 py-1 rounded-full">
-        Reservas
+        Minhas Reservas
       </div>
       <div>•</div>
       <div className="hover:text-[#007090] hover:bg-[#cce2e9] hover:cursor-pointer px-4 py-1 rounded-full">

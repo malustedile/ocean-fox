@@ -35,32 +35,37 @@ interface Destino {
 export const Carousel = () => {
   const [destinos, setDestinos] = useState([]);
 
-  const puxandoDestinos = async () => {
+  const categoriasDeDestinos = async () => {
     const response = await destinosPorCategoria();
     setDestinos(response);
   };
 
+  const handleClickItem = (categoria: keyof typeof iconsCategorias) => {};
+
   useEffect(() => {
-    const fetchDestinos = async () => {
+    const fetchCategorias = async () => {
       try {
-        await puxandoDestinos();
+        await categoriasDeDestinos();
       } catch (error) {
         console.error("Erro ao buscar destinos:", error);
       }
     };
 
-    fetchDestinos();
+    fetchCategorias();
   }, []);
 
   return (
-    <div className="carousel rounded-box w-full gap-2">
-      {destinos.map((destino: Destino) => (
-        <CarouselItem
-          title={destino.categoria}
-          subtitle={`${destino.quantidade} destinos`}
-          icon={iconsCategorias[destino.categoria]}
-        />
-      ))}
+    <div className="flex flex-col w-full h-full gap-4 items-center justify-center">
+      <div className="carousel rounded-box w-full gap-2">
+        {destinos.map((destino: Destino) => (
+          <CarouselItem
+            title={destino.categoria}
+            subtitle={`${destino.quantidade} destinos`}
+            icon={iconsCategorias[destino.categoria]}
+            onClick={handleClickItem}
+          />
+        ))}
+      </div>
     </div>
   );
 };
