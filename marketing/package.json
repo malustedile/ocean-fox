@@ -6,6 +6,7 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
+    "@elysiajs/cors": "^1.2.0",
     "@types/amqplib": "^0.10.7",
     "amqplib": "^0.10.7",
     "elysia": "latest",

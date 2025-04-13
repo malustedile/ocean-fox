@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import amqp from "amqplib";
 import { MongoClient } from "mongodb";
+import cors from "@elysiajs/cors";
 
 const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
 const db = client.db("ocean-fox");
@@ -44,12 +45,17 @@ for (const inscricao of incricoesAtivas) {
 }
 
 const app = new Elysia()
+  .use(cors())
   .get("/", () => "Hello Elysia")
   .get("/minhas-inscricoes", async ({ cookie }) => {
     const mySubscriptions = await inscricoes
       .find({ sessionId: cookie.sessionId.value })
       .toArray();
-    return mySubscriptions;
+    const myPromotions = await promocoes
+      .find({ sessionId: cookie.sessionId.value })
+      .toArray();
+
+    return { subscriptions: mySubscriptions, promotions: myPromotions };
   })
   .post("/inscrever", async ({ body, cookie }) => {
     const { destino } = body as any;

@@ -38,7 +38,7 @@ export const NavBar: React.FC<NavBarProps> = ({ activeScreen, setScreen }) => {
         className={classNameButtons}
         onClick={() => setScreen(Screens.InscrevaSe)}
       >
-        Promoçoes
+        Promoções
       </div>
     </div>
   );

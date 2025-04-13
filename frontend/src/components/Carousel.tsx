@@ -14,6 +14,7 @@ import { IoSnowOutline } from "react-icons/io5";
 import { destinosPorCategoria, puxarDestinos } from "../api/destinos";
 import { useEffect, useState } from "react";
 import { FilteredTrips, Trip } from "./FilteredTrips";
+import { puxarPromocoes } from "../api/marketing";
 
 export const iconsCategorias = {
   Brasil: <GiBrazilFlag size={30} />,
@@ -36,6 +37,10 @@ interface Destino {
 export const Carousel = () => {
   const [loading, setLoading] = useState(false);
   const [destinos, setDestinos] = useState([]);
+  const [promocoes, setPromocoes] = useState({
+    subscriptions: [],
+    promotions: [],
+  });
   const [destinosDeCategoria, setDestinosDeCategoria] = useState<Trip[]>([]);
 
   const categoriasDeDestinos = async () => {
@@ -47,7 +52,14 @@ export const Carousel = () => {
     setLoading(true);
     const response = await puxarDestinos({ categoria });
     setDestinosDeCategoria(response);
+    fetchPromotions();
+
     setLoading(false);
+  };
+
+  const fetchPromotions = async () => {
+    const p = await puxarPromocoes();
+    setPromocoes(p);
   };
 
   useEffect(() => {
@@ -60,6 +72,7 @@ export const Carousel = () => {
     };
 
     fetchCategorias();
+    fetchPromotions();
   }, []);
 
   return (
@@ -75,17 +88,20 @@ export const Carousel = () => {
         ))}
       </div>
       {loading && <div className="loading loading-spinner"></div>}
-      {destinosDeCategoria.length != 0 && (
+      {destinosDeCategoria.length != 0 && !loading && (
         <div className="flex flex-col w-full h-full p-4 gap-4">
           <div>
             <h2 className="text-slate-700 text-lg font-medium">
-              Destinos disponíveis
+              {destinosDeCategoria[0].categoria}
             </h2>
             <div className="text-slate-500 text-sm">
               {destinosDeCategoria.length} destinos encontrados
             </div>
           </div>
-          <FilteredTrips filter={destinosDeCategoria} />
+          <FilteredTrips
+            filter={destinosDeCategoria}
+            subscriptions={promocoes.subscriptions}
+          />
         </div>
       )}
     </div>
