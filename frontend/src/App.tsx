@@ -6,7 +6,7 @@ import axios from "axios";
 import { MinhasReservas } from "./screens/MinhasReservas";
 import { Promocoes } from "./screens/Promocoes";
 import { Itinerarios } from "./screens/Itinerarios";
-
+import Hero from "../public/hero.png";
 export enum Screens {
   Itinerarios = "ITINERARIOS",
   MinhasReservas = "MINHAS_RESERVAS",
@@ -38,7 +38,10 @@ function App() {
   return (
     <div className="flex w-screen justify-center text-slate-800 min-h-screen bg-gray-100 p-4">
       <div className="flex flex-col w-[1000px] h-full gap-4">
-        <div className="flex flex-col w-full rounded-2xl shadow-md p-6 py-4 static relative">
+        <div
+          className="flex flex-col w-full rounded-2xl shadow-md p-6 py-4 static relative bg-no-repeat bg-center bg-cover"
+          style={{ backgroundImage: "url(../public/hero.png)" }}
+        >
           <div className="flex items-center justify-center gap-2 text-2xl font-bold mr-auto relative top-8 left-8">
             <div className="w-8 h-8">
               <img src="src/assets/logo.png" />
@@ -51,7 +54,7 @@ function App() {
               <h1 className="text-5xl md:text-6xl font-black text-[#002d3a]">
                 Explore o mundo
               </h1>
-              <p className="mt-4 text-gray-500">Encontre sua próxima viagem</p>
+              <p className="mt-4 font-bold">Encontre sua próxima viagem</p>
               <FilterBar setFilter={setFilter} />
             </div>
           )}

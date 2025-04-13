@@ -49,7 +49,7 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
 }) => {
   return (
     <div className="flex justify-between bg-white p-4 px-12 pr-8 rounded-xl relative">
-      <div className=" flex gap-14">
+      <div className=" grid grid-cols-[8fr_10fr_8fr_6fr_3fr_1fr] gap-6 w-full">
         <div className="absolute top-[-20px] left-12  ">
           <div className=" bg-[#b3d4de] px-2 py-1 rounded-lg text-[#007090] font-bold">
             #{id.slice(-6)}
@@ -59,20 +59,24 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
           <div className="font-bold">Data do pedido:</div>
           <div className="text-slate-500">{formatDate(new Date(data))}</div>
         </div>
-        <div>
+        <div className="truncate">
           <div className="font-bold">Destino:</div>
-          <div className="text-slate-500">{destino}</div>
+          <div className="text-slate-500 text-ellipsis">{destino}</div>
         </div>
-        <div>
+        <div className="flex flex-col w-full">
           <div className="font-bold">Status:</div>
           {status === "PAGAMENTO_APROVADO" && (
-            <div className="bg-[#d3f9d8] text-sm px-2 rounded-lg text-[#2b8a3e] font-bold ">
-              Pagamento Aprovado
+            <div className="flex  ">
+              <div className="flex bg-[#d3f9d8] text-sm px-2 rounded-lg text-[#2b8a3e] font-bold ">
+                Pagamento Aprovado
+              </div>
             </div>
           )}
           {status === "PAGAMENTO_REPROVADO" && (
-            <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold ">
-              Pagamento Reprovado
+            <div className="flex  ">
+              <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold">
+                Pagamento Reprovado
+              </div>
             </div>
           )}
         </div>
@@ -90,14 +94,16 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
             }).format(Number(valor))}
           </div>
         </div>
-      </div>
-      {status === "PAGAMENTO_APROVADO" && (
         <div className="flex items-center justify-center">
-          <div className="cursor-pointer">
-            <MdOutlineFileDownload className="text-xl" />
-          </div>
+          {status === "PAGAMENTO_APROVADO" && (
+            <div className="flex items-center justify-center">
+              <div className="cursor-pointer">
+                <MdOutlineFileDownload className="text-xl" />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

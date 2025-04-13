@@ -7,8 +7,12 @@ interface ItinerariosProps {
 
 export const Itinerarios = ({ filter }: ItinerariosProps) => {
   return (
-    <div className="flex flex-col overflow-y-scroll">
-      {filter ? <FilteredTrips filter={filter} /> : <Carousel />}
+    <div className="flex flex-col">
+      {filter ? (
+        <FilteredTrips filter={filter} subscriptions={[]} />
+      ) : (
+        <Carousel />
+      )}
     </div>
   );
 };

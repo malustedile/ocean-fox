@@ -36,11 +36,11 @@ export const PromotionsScreen = ({ promotions }: { promotions: any }) => {
     <div>
       <div>
         <div className="font-bold ">Minhas Inscrições</div>
-        <div className="flex gap-2 my-2">
+        <div className="mx-2 mb-4">
           {promotions.subscriptions?.map((s: any) => (
-            <span className="bg-[#99e9f2] text-[#0c8599] text-xs p-1 px-4 rounded-lg font-bold">
+            <div className="bg-[#99e9f2] text-[#0c8599] text-xs p-1 px-4 rounded-lg font-bold inline-block mr-2 mt-1">
               {s.destino}
-            </span>
+            </div>
           ))}
         </div>
       </div>

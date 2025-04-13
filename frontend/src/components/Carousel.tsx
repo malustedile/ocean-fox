@@ -17,16 +17,18 @@ import { FilteredTrips, Trip } from "./FilteredTrips";
 import { puxarPromocoes } from "../api/marketing";
 
 export const iconsCategorias = {
-  Brasil: <GiBrazilFlag size={30} />,
-  "América do Sul": <GiAztecCalendarSun size={30} />,
-  "América do Norte": <GiMayanPyramid size={30} />,
-  Caribe: <GiPalmTree size={30} />,
-  África: <GiAfrica size={30} />,
-  "Oriente Médio": <TbBuildingBurjAlArab size={30} />,
-  Ásia: <GiJapaneseBridge size={30} />,
-  Mediterrâneo: <GiGreekTemple size={30} />,
-  Escandinávia: <IoSnowOutline size={30} />,
-  Oceania: <GiKangaroo size={30} />,
+  Brasil: <GiBrazilFlag size={30} className="text-[#007090]" />,
+  "América do Sul": <GiAztecCalendarSun size={30} className="text-[#007090]" />,
+  "América do Norte": <GiMayanPyramid size={30} className="text-[#007090]" />,
+  Caribe: <GiPalmTree size={30} className="text-[#007090]" />,
+  África: <GiAfrica size={30} className="text-[#007090]" />,
+  "Oriente Médio": (
+    <TbBuildingBurjAlArab size={30} className="text-[#007090]" />
+  ),
+  Ásia: <GiJapaneseBridge size={30} className="text-[#007090]" />,
+  Mediterrâneo: <GiGreekTemple size={30} className="text-[#007090]" />,
+  Escandinávia: <IoSnowOutline size={30} className="text-[#007090]" />,
+  Oceania: <GiKangaroo size={30} className="text-[#007090]" />,
 };
 
 interface Destino {
@@ -37,6 +39,8 @@ interface Destino {
 export const Carousel = () => {
   const [loading, setLoading] = useState(false);
   const [destinos, setDestinos] = useState([]);
+  const [slide, setSlide] = useState(1);
+
   const [promocoes, setPromocoes] = useState({
     subscriptions: [],
     promotions: [],
@@ -74,18 +78,37 @@ export const Carousel = () => {
     fetchCategorias();
     fetchPromotions();
   }, []);
-
+  console.log(slide);
   return (
-    <div className="flex flex-col w-full h-full gap-4 items-center justify-center">
-      <div className="carousel rounded-box w-full gap-2">
-        {destinos.map((destino: Destino) => (
-          <CarouselItem
-            title={destino.categoria}
-            subtitle={`${destino.quantidade} destinos`}
-            icon={iconsCategorias[destino.categoria]}
-            onClick={handleClickItem}
-          />
-        ))}
+    <div className="flex flex-col w-full h-full gap-4 items-center justify-center ">
+      <div className="relative w-full">
+        <div className="carousel rounded-box w-full gap-2 ">
+          {destinos.map((destino: Destino, index) => (
+            <CarouselItem
+              id={index}
+              title={destino.categoria}
+              subtitle={`${destino.quantidade} destinos`}
+              icon={iconsCategorias[destino.categoria]}
+              onClick={handleClickItem}
+            />
+          ))}
+          <div className="absolute left-[-24px] right-[-24px] top-1/2 flex -translate-y-1/2 transform justify-between">
+            <a
+              href={`#slide${slide - 2}`}
+              className="btn btn-circle bg-[#007090] border-none"
+              onClick={() => setSlide((prev) => (prev - 2 > 2 ? prev - 2 : 2))}
+            >
+              ❮
+            </a>
+            <a
+              href={`#slide${slide + 2}`}
+              className="btn btn-circle bg-[#007090] border-none"
+              onClick={() => setSlide((prev) => (prev + 2 < 7 ? prev + 2 : 7))}
+            >
+              ❯
+            </a>
+          </div>
+        </div>
       </div>
       {loading && <div className="loading loading-spinner"></div>}
       {destinosDeCategoria.length != 0 && !loading && (

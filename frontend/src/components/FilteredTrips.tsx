@@ -28,7 +28,7 @@ export const FilteredTrips = ({
   const [trip, setTrip] = useState<Trip>();
 
   return (
-    <div className="flex flex-wrap h-full w-full gap-4 items-center justify-start overflow-x-hidden">
+    <div className="flex flex-wrap h-full w-full gap-4 items-center justify-center overflow-x-hidden">
       {filter.map((trip: Trip, index: number) => (
         <TripCard
           index={index}

@@ -2,6 +2,7 @@ import { iconsCategorias } from "./Carousel";
 import { Tag } from "./Tag";
 
 interface CarouselItemProps {
+  id: number;
   title: string;
   subtitle: string;
   icon: React.ReactNode;
@@ -11,6 +12,7 @@ interface CarouselItemProps {
 }
 
 export const CarouselItem = ({
+  id,
   title,
   subtitle,
   icon,
@@ -23,7 +25,7 @@ export const CarouselItem = ({
   };
 
   return (
-    <div className="carousel-item" onClick={handleClick}>
+    <div id={`slide${id}`} className="carousel-item" onClick={handleClick}>
       <div className="flex flex-col w-[200px] h-[130px] bg-white rounded-xl p-6 border border-slate-300 gap-3 hover:cursor-pointer hover:bg-slate-50">
         <div className="flex w-full justify-between items-start">
           <div>{icon}</div>
