@@ -3,13 +3,13 @@ import amqp from "amqplib";
 import { MongoClient } from "mongodb";
 import cors from "@elysiajs/cors";
 
-const client = new MongoClient("mongodb://root:exemplo123@localhost:27017");
+const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
 const db = client.db("ocean-fox");
 const inscricoes = db.collection("inscricoes");
 
 const promocoes = db.collection("promocoes");
 
-const rabbit = await amqp.connect("amqp://localhost");
+const rabbit = await amqp.connect("amqp://rabbitmq");
 const channel = await rabbit.createChannel();
 
 await channel.assertQueue("pagamento-aprovado", {
@@ -79,7 +79,7 @@ const app = new Elysia()
   .post("/promocao", async ({ body }) => {
     const { destino, mensagem } = body as any;
     const exchange = `promocoes-${destino}`;
-    const conn = await amqp.connect("amqp://localhost");
+    const conn = await amqp.connect("amqp://rabbitmq");
     const channel = await conn.createChannel();
     const promocao = { mensagem, destino, criadoEm: new Date() };
     await channel.assertExchange(exchange, "fanout", { durable: false });

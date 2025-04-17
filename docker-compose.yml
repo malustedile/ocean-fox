@@ -62,6 +62,20 @@ services:
       - mongodb
     restart: unless-stopped
 
+  marketing:
+    build:
+      context: ./marketing
+      dockerfile: Dockerfile
+    container_name: marketing-service
+    ports:
+      - "3004:3004"
+    volumes:
+      - ./marketing:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
+
   session:
     build:
       context: ./session
