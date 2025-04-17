@@ -13,7 +13,12 @@ export const Promocoes = () => {
 
   useEffect(() => {
     fetchPromotions();
+    const interval = setInterval(() => {
+      fetchPromotions();
+    }, 500);
+    return () => clearInterval(interval);
   }, []);
+
   return (
     <div className="">
       {promocoes?.subscriptions?.length === 0 && (
@@ -24,7 +29,7 @@ export const Promocoes = () => {
           </div>
         </div>
       )}
-      {promocoes?.promotions?.length > 0 && (
+      {promocoes?.subscriptions?.length > 0 && (
         <PromotionsScreen promotions={promocoes} />
       )}
     </div>
