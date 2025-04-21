@@ -1,7 +1,9 @@
 import { Elysia } from "elysia";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import amqp from "amqplib";
 import cors from "@elysiajs/cors";
+import { createVerify } from "crypto";
+import { readFileSync } from "fs";
 
 const client = new MongoClient("mongodb://root:exemplo123@meu_mongodb:27017");
 const db = client.db("ocean-fox");
@@ -18,8 +20,16 @@ await channel.assertExchange(reservaExchange, "fanout", {
   durable: false,
 });
 
+const pagamentoAprovadoExchange = "pagamento-aprovado-exc";
 const channelPagamentoAprovado = await rabbit.createChannel();
-await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
+await channelPagamentoAprovado.assertExchange(
+  pagamentoAprovadoExchange,
+  "direct",
+  {
+    durable: true,
+  }
+);
+const q = await channelPagamentoAprovado.assertQueue("", {
   durable: true,
 });
 
@@ -34,6 +44,38 @@ await channelBilheteGerado.assertQueue("bilhete-gerado", {
 });
 
 await client.connect();
+
+channelPagamentoAprovado.bindQueue(
+  q.queue,
+  pagamentoAprovadoExchange,
+  "reserva"
+);
+
+channelPagamentoAprovado.consume(
+  q.queue,
+  async (msg: any) => {
+    const pedido = JSON.parse(msg.content.toString());
+    const verifier = createVerify("sha256");
+    verifier.update(JSON.stringify(pedido.reserva));
+    verifier.end();
+
+    const chavePublica = readFileSync("./pagamento.pub", "utf-8");
+    const isValid = verifier.verify(chavePublica, pedido.assinatura, "base64");
+    console.log("Assinatura válida:", isValid);
+    console.log("Pedido recebido:", pedido);
+    return await reservas.updateOne(
+      {
+        _id: new ObjectId(pedido.reserva.id),
+      },
+      {
+        $set: {
+          pagamentoValido: isValid,
+        },
+      }
+    );
+  },
+  { noAck: true }
+);
 
 enum Categorias {
   BRAZIL = "Brasil",
@@ -61,14 +103,6 @@ interface destinosDto {
     valorPorPessoa: number;
   };
 }
-
-const authGuard = () => (app: Elysia) =>
-  app.onBeforeHandle(({ cookie, set }) => {
-    if (!cookie?.sessionId?.value) {
-      set.status = 401;
-      return "Unauthorized";
-    }
-  });
 
 interface reservaDto {
   destino: string;

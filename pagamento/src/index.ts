@@ -20,6 +20,7 @@ const db = client.db("ocean-fox");
 const reservas = db.collection("reservas");
 
 const reservaExchange = "reserva-criada-exc";
+const pagamentoAprovadoExchange = "pagamento-aprovado-exc";
 
 const rabbit = await amqp.connect("amqp://rabbitmq");
 const channelReserva = await rabbit.createChannel();
@@ -35,6 +36,12 @@ const reservaQueue = await channelReserva.assertQueue("reserva-criada", {
 await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
   durable: true,
 });
+await channelPagamentoAprovado.assertExchange(
+  "pagamento-aprovado-exc",
+  "direct",
+  { durable: true }
+);
+
 await channelPagamentoRecusado.assertQueue("pagamento-recusado", {
   durable: true,
 });
@@ -76,7 +83,18 @@ channelReserva.consume(
         })
       );
       if (pagamentoAprovado) {
-        channelPagamentoAprovado.sendToQueue("pagamento-aprovado", payload);
+        const res = channelPagamentoAprovado.publish(
+          pagamentoAprovadoExchange,
+          "reserva",
+          payload
+        );
+        const bil = channelPagamentoAprovado.publish(
+          pagamentoAprovadoExchange,
+          "bilhete",
+          payload
+        );
+        console.log({ res, bil });
+
         console.log("Pagamento aprovado:", reserva);
       } else {
         channelPagamentoRecusado.sendToQueue("pagamento-recusado", payload);

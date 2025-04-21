@@ -30,19 +30,33 @@ const rabbit = await amqp.connect("amqp://rabbitmq");
 const channelPagamentoAprovado = await rabbit.createChannel();
 const channelBilheteGerado = await rabbit.createChannel();
 
-await channelPagamentoAprovado.assertQueue("pagamento-aprovado", {
+const pagamentoAprovadoExchange = "pagamento-aprovado-exc";
+
+await channelPagamentoAprovado.assertExchange(
+  pagamentoAprovadoExchange,
+  "direct",
+  {
+    durable: true,
+  }
+);
+const q = await channelPagamentoAprovado.assertQueue("", {
   durable: true,
 });
 await channelBilheteGerado.assertQueue("bilhete-gerado", {
   durable: true,
 });
 
+channelPagamentoAprovado.bindQueue(
+  q.queue,
+  pagamentoAprovadoExchange,
+  "bilhete"
+);
+
 channelPagamentoAprovado.consume(
-  "pagamento-aprovado",
+  q.queue,
   (msg: any) => {
     if (msg) {
       const pedido = JSON.parse(msg.content.toString()) as pedidoPayload;
-      console.log(pedido);
 
       const verifier = createVerify("sha256");
       verifier.update(JSON.stringify(pedido.reserva));
