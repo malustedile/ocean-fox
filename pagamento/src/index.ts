@@ -85,15 +85,9 @@ channelReserva.consume(
       if (pagamentoAprovado) {
         const res = channelPagamentoAprovado.publish(
           pagamentoAprovadoExchange,
-          "reserva",
+          "pagamento-aprovado",
           payload
         );
-        const bil = channelPagamentoAprovado.publish(
-          pagamentoAprovadoExchange,
-          "bilhete",
-          payload
-        );
-        console.log({ res, bil });
 
         console.log("Pagamento aprovado:", reserva);
       } else {

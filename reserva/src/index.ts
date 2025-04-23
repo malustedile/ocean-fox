@@ -48,7 +48,7 @@ await client.connect();
 channelPagamentoAprovado.bindQueue(
   q.queue,
   pagamentoAprovadoExchange,
-  "reserva"
+  "pagamento-aprovado"
 );
 
 channelPagamentoAprovado.consume(

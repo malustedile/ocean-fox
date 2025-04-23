@@ -49,7 +49,7 @@ await channelBilheteGerado.assertQueue("bilhete-gerado", {
 channelPagamentoAprovado.bindQueue(
   q.queue,
   pagamentoAprovadoExchange,
-  "bilhete"
+  "pagamento-aprovado"
 );
 
 channelPagamentoAprovado.consume(
