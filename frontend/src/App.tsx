@@ -6,7 +6,6 @@ import axios from "axios";
 import { MinhasReservas } from "./screens/MinhasReservas";
 import { Promocoes } from "./screens/Promocoes";
 import { Itinerarios } from "./screens/Itinerarios";
-import Hero from "../public/hero.png";
 export enum Screens {
   Itinerarios = "ITINERARIOS",
   MinhasReservas = "MINHAS_RESERVAS",

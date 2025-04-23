@@ -34,6 +34,20 @@ services:
       - mongodb
     restart: unless-stopped
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "5173:80"
+    volumes:
+      - ./frontend:/app
+    depends_on:
+      - rabbitmq
+      - mongodb
+    restart: unless-stopped
+
   pagamento:
     build:
       context: ./pagamento
