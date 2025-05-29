@@ -34,7 +34,7 @@ export const FilteredTrips = ({
           index={index}
           trip={trip}
           setTrip={setTrip}
-          subscripted={subscriptions.some((s) => s.destino === trip.nome)}
+          subscripted={subscriptions?.some((s) => s.destino === trip.nome)}
           setOpenBookingModal={setOpenBookingModal}
         />
       ))}

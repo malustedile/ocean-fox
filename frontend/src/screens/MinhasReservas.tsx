@@ -52,7 +52,7 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
       <div className=" grid grid-cols-[8fr_10fr_8fr_6fr_3fr_1fr] gap-6 w-full">
         <div className="absolute top-[-20px] left-12  ">
           <div className=" bg-[#b3d4de] px-2 py-1 rounded-lg text-[#007090] font-bold">
-            #{id.slice(-6)}
+            #{id?.slice(-6)}
           </div>
         </div>
         <div>
