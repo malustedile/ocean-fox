@@ -109,7 +109,7 @@ func main() {
     // Fiber app
 	app := fiber.New()
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000", // coloque aqui o domínio do seu frontend
+		AllowOrigins:     "http://localhost:5173", // coloque aqui o domínio do seu frontend
 		AllowCredentials: true,
 	}))
 

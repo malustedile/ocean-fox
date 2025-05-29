@@ -665,7 +665,7 @@ func main() {
 	// CORS middleware
 	// AllowedOrigins can be more specific in production
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}), // Or specify your frontend domain(s)
+		handlers.AllowedOrigins([]string{"http://localhost:5173"}), // Or specify your frontend domain(s)
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-Requested-With"}),
 		handlers.AllowCredentials(), // Important if you use cookies/auth headers from frontend
