@@ -1,16 +1,11 @@
-FROM oven/bun:1.0.25
+FROM golang:1.22-alpine
 
-# Entra no diretório da app dentro do container
 WORKDIR /app
 
-# Copia tudo da pasta local `reserva/` para o container
 COPY . .
 
-# Instala as dependências
-RUN bun install
+RUN go mod tidy && go build -o bilhete main.go
 
-# Expõe a porta
 EXPOSE 3002
 
-# Roda o app
-CMD ["bun", "src/index.ts"]
+CMD ["./bilhete"]
