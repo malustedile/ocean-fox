@@ -1,11 +1,10 @@
-docker compose down
 sudo fuser -k 3000/tcp
 sudo fuser -k 3001/tcp
 sudo fuser -k 3002/tcp
 sudo fuser -k 3003/tcp
 sudo fuser -k 3004/tcp
 sudo fuser -k 3005/tcp
-docker compose up -d
+sudo fuser -k 5173/tcp
 
 echo "Iniciando Pagamento..."
 (cd pagamento-go && go run main.go > ../pagamento.log 2>&1) &
