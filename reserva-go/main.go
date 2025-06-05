@@ -2,17 +2,10 @@ package main
 
 import (
 	"context"
-	"crypto"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -38,9 +31,13 @@ const (
 	httpServerAddress       = ":3000"
 	reservaCriadaQueue      = "reserva-criada"
 	reservaCriadaExchange   = "reserva-criada-exc"    // Fanout
+	reservaCanceladaQueue   = "reserva-cancelada"     // Direct
+	reservaCanceladaExchange = "reserva-cancelada-exc" // Direct
 	pagamentoAprovadoExchange = "pagamento-aprovado-exc" // Direct
 	pagamentoAprovadoRK     = "pagamento-aprovado"
 	pagamentoRecusadoQueue  = "pagamento-recusado"
+	pagamentoRecusadoExchange = "pagamento-recusado-exc" // Direct
+	pagamentoRecusadoRK = "pagamento-recusado"
 	bilheteGeradoQueue      = "bilhete-gerado"
 )
 
@@ -91,6 +88,10 @@ type ReservaDTO struct { // For request body when creating a reserva
 	NumeroPassageiros int     `json:"numeroPassageiros"`
 	NumeroCabines     int     `json:"numeroCabines"`
 	ValorTotal        float64 `json:"valorTotal"`
+}
+
+type CancelamentoDTO struct { // For request body when canceling a reserva
+	ID string `json:"id"` // Reserva ID to cancel
 }
 
 type ReservaDocument struct { // For MongoDB
@@ -147,7 +148,6 @@ var (
 	reservasCollection   *mongo.Collection
 	rabbitMQConnection   *amqp.Connection
 	rabbitMQChannelGlobal *amqp.Channel // General purpose channel for publishing reserva-criada
-	rsaPublicKey         *rsa.PublicKey
 )
 
 // --- Helper Functions ---
@@ -224,6 +224,41 @@ func initRabbitMQ() {
 	)
 	failOnError(err, "Failed to declare exchange 'reserva-criada-exc'")
 
+	// Channel for "reserva-cancelada"
+	chReservaCancelada, err := rabbitMQConnection.Channel()
+	failOnError(err, "Failed to open channel for reserva cancelada")
+	defer chReservaCancelada.Close() // Close if only used for declaration here
+	_, err = chReservaCancelada.QueueDeclare(
+		reservaCanceladaQueue, // name
+		true,                // durable
+		false,               // delete when unused
+		false,               // exclusive
+		false,               // no-wait
+		nil,                 // arguments
+	)
+	failOnError(err, "Failed to declare queue 'reserva-cancelada'")
+
+	// Declare exchange "reserva-cancelada-exc" (fanout, not durable as per JS)
+	err = rabbitMQChannelGlobal.ExchangeDeclare(
+		reservaCanceladaExchange, // name
+		"fanout",              // type
+		false,                 // durable (JS has false)
+		false,                 // auto-deleted
+		false,                 // internal
+		false,                 // no-wait
+		nil,                   // arguments
+	)
+	failOnError(err, "Failed to declare exchange 'reserva-cancelada-exc'")
+
+	// Bind queue to exchange
+	err = chReservaCancelada.QueueBind(
+		reservaCanceladaQueue, // queue name
+		"",                    // routing key (fanout ignores this)
+		reservaCanceladaExchange, // exchange
+		false,                 // no-wait
+		nil,                   // arguments
+	)
+	failOnError(err, "Failed to bind reserva cancelada queue to exchange")
 
 	// Setup for Pagamento Aprovado consumer
 	chPagamentoAprovado, err := rabbitMQConnection.Channel()
@@ -268,9 +303,39 @@ func initRabbitMQ() {
 	// Channel for "pagamento-recusado"
 	chPagamentoRecusado, err := rabbitMQConnection.Channel()
 	failOnError(err, "Failed to open channel for pagamento recusado")
-	defer chPagamentoRecusado.Close() // Close if only used for declaration here
-	_, err = chPagamentoRecusado.QueueDeclare(pagamentoRecusadoQueue, true, false, false, false, nil)
-	failOnError(err, "Failed to declare queue 'pagamento-recusado'")
+	// Declare exchange "pagamento-recusado-exc" (direct, durable)
+	err = chPagamentoAprovado.ExchangeDeclare(
+		pagamentoRecusadoExchange, // name
+		"direct",                  // type
+		true,                      // durable
+		false,                     // auto-deleted
+		false,                     // internal
+		false,                     // no-wait
+		nil,                       // arguments
+	)
+	failOnError(err, "Failed to declare exchange 'pagamento-recusado-exc'")
+
+	// Declare anonymous, durable queue for pagamento aprovado
+	qPagamentoRecusado, err := chPagamentoRecusado.QueueDeclare(
+		"",    // name (server-generated)
+		true,  // durable
+		false, // delete when unused
+		true,  // exclusive (JS was true with empty name)
+		false, // no-wait
+		nil,   // arguments
+	)
+	failOnError(err, "Failed to declare queue for pagamento recusado")
+
+	err = chPagamentoRecusado.QueueBind(
+		qPagamentoRecusado.Name,   // queue name
+		pagamentoRecusadoRK,       // routing key
+		pagamentoRecusadoExchange, // exchange
+		false,
+		nil,
+	)
+	failOnError(err, "Failed to bind pagamento recusado queue")
+
+	go consumePagamentoRecusado(chPagamentoRecusado, pagamentoRecusadoQueue)
 
 	// Channel for "bilhete-gerado"
 	chBilheteGerado, err := rabbitMQConnection.Channel()
@@ -278,26 +343,6 @@ func initRabbitMQ() {
 	defer chBilheteGerado.Close() // Close if only used for declaration here
 	_, err = chBilheteGerado.QueueDeclare(bilheteGeradoQueue, true, false, false, false, nil)
 	failOnError(err, "Failed to declare queue 'bilhete-gerado'")
-}
-
-func loadPublicKey() {
-	keyBytes, err := os.ReadFile(publicKeyPath)
-	failOnError(err, "Failed to read public key file")
-
-	block, _ := pem.Decode(keyBytes)
-	if block == nil || block.Type != "PUBLIC KEY" {
-		log.Fatalf("Failed to decode PEM block containing public key or wrong type: %s", block.Type)
-	}
-
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	failOnError(err, "Failed to parse PKIX public key")
-
-	var ok bool
-	rsaPublicKey, ok = pub.(*rsa.PublicKey)
-	if !ok {
-		log.Fatalf("Public key is not an RSA key")
-	}
-	log.Println("Public key loaded successfully.")
 }
 
 // --- RabbitMQ Consumers ---
@@ -323,35 +368,7 @@ func consumePagamentoAprovado(ch *amqp.Channel, queueName string) {
 			d.Nack(false, false) // Do not requeue
 			continue
 		}
-
-		// Verify signature
-		// 1. Marshal the Reserva part to JSON (ensure order and fields match what was signed)
-		reservaBytes, err := json.Marshal(payload.Reserva)
-		if err != nil {
-			log.Printf("Error marshalling reserva for signature verification: %v", err)
-			d.Nack(false, false) // Do not requeue
-			continue
-		}
-
-		// 2. Decode Base64 signature
-		signatureBytes, err := base64.StdEncoding.DecodeString(payload.Assinatura)
-		if err != nil {
-			log.Printf("Error decoding Base64 signature: %v", err)
-			d.Nack(false, false) // Do not requeue
-			continue
-		}
-
-		// 3. Hash the marshalled reserva
-		hasher := sha256.New()
-		hasher.Write(reservaBytes)
-		hashed := hasher.Sum(nil)
-
-		// 4. Verify
-		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hashed, signatureBytes)
-		isValid := err == nil
-		log.Printf("Signature valid: %t (Error: %v)", isValid, err)
-		log.Printf("Pedido recebido: %+v", payload)
-
+		
 		// Update MongoDB
 		reservaID, err := primitive.ObjectIDFromHex(payload.Reserva.ID)
 		if err != nil {
@@ -359,18 +376,95 @@ func consumePagamentoAprovado(ch *amqp.Channel, queueName string) {
 			d.Nack(false, false) // Do not requeue
 			continue
 		}
+		reservasCollection.UpdateOne(
+			context.Background(),
+			bson.M{"_id": reservaID},
+			bson.M{
+				"$set": bson.M{
+					"status":          "PAGAMENTO_APROVADO",
+					"bilhete":         nil,
+				},
+			},
+		)
 
-		filter := bson.M{"_id": reservaID}
-		update := bson.M{"$set": bson.M{"pagamentoValido": isValid}}
-		_, updateErr := reservasCollection.UpdateOne(context.Background(), filter, update)
+		log.Printf("Reserva %s updated", reservaID.Hex())
+		d.Ack(false) // Acknowledge the message
+	}
+}
 
-		if updateErr != nil {
-			log.Printf("Error updating reserva in MongoDB: %v", updateErr)
-			d.Nack(false, true) // Requeue, might be a transient MongoDB issue
-		} else {
-			log.Printf("Reserva %s updated with pagamentoValido: %t", reservaID.Hex(), isValid)
-			d.Ack(false) // Acknowledge message
+func consumePagamentoRecusado(ch *amqp.Channel, queueName string) {
+	msgs, err := ch.Consume(
+		queueName, // queue
+		"",        // consumer
+		false,     // auto-ack (false for manual ack)
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
+	)
+	failOnError(err, "Failed to register a consumer for pagamento recusado")
+
+	log.Printf(" [*] Waiting for 'pagamento-recusado' messages. To exit press CTRL+C")
+	for d := range msgs {
+		log.Printf("Received a 'pagamento-recusado' message: %s", d.Body)
+		var payload PedidoPagamentoPayload
+		if err := json.Unmarshal(d.Body, &payload); err != nil {
+			log.Printf("Error unmarshalling 'pagamento-recusado' message: %v", err)
+			d.Nack(false, false) // Do not requeue
+			continue
 		}
+		
+		// Cancelando a reserva (publica como reserva cancelada)
+		reservaID, err := primitive.ObjectIDFromHex(payload.Reserva.ID)
+		if err != nil {
+			log.Printf("Error converting reserva ID to ObjectID: %v", err)
+			d.Nack(false, false) // Do not requeue
+			continue
+		}
+		reservasCollection.UpdateOne(
+			context.Background(),
+			bson.M{"_id": reservaID},
+			bson.M{
+				"$set": bson.M{
+					"status":          "PAGAMENTO_RECUSADO",
+					"bilhete":         nil,
+				},
+			},
+		)
+		// publicando na fila de reserva cancelada
+		canceladaMsg := bson.M{
+			"id": reservaID.Hex(),
+			"destino":           payload.Reserva.Destino,
+			"sessionId":         payload.Reserva.SessionID,
+			"dataEmbarque":      payload.Reserva.DataEmbarque,
+			"numeroPassageiros": payload.Reserva.NumeroPassageiros,
+			"numeroCabines":     payload.Reserva.NumeroCabines,
+			"valorTotal":        payload.Reserva.ValorTotal,
+		}
+		canceladaMsgBytes, err := json.Marshal(canceladaMsg)
+		if err != nil {
+			log.Printf("Error marshalling 'reserva cancelada' message: %v", err)
+			d.Nack(false, false) // Do not requeue
+			continue
+		}
+		err = rabbitMQChannelGlobal.PublishWithContext(
+			context.Background(),
+			reservaCanceladaExchange, // exchange
+			"",                    // routing key (fanout ignores this)
+			false,                 // mandatory
+			false,                 // immediate
+			amqp.Publishing{
+				ContentType: "application/json",
+				Body:        canceladaMsgBytes,
+			})
+		if err != nil {
+			log.Printf("Error publishing 'reserva cancelada' message: %v", err)
+			d.Nack(false, false) // Do not requeue
+			continue
+		}
+
+		log.Printf("Reserva %s cancelada devido a pagamento recusado", reservaID.Hex())
+		d.Ack(false) // Acknowledge the message
 	}
 }
 
@@ -518,6 +612,87 @@ func destinosPorCategoriaHandler(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, results)
 }
 
+func cancelarViagemHandler(w http.ResponseWriter, r *http.Request) {
+	var dto CancelamentoDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido.")
+		return
+	}
+
+	sessionCookie, err := r.Cookie("sessionId")
+	if err != nil || sessionCookie.Value == "" {
+		respondWithError(w, http.StatusUnauthorized, "Cookie 'sessionId' inválido ou ausente.")
+		return
+	}
+	sessionID := sessionCookie.Value
+
+	if dto.ID == "" {
+		respondWithError(w, http.StatusBadRequest, "Campos obrigatórios ausentes ou inválidos.")
+		return
+	}
+
+	log.Println("Cancelando reserva com ID:", dto.ID)
+	objID, err := primitive.ObjectIDFromHex(dto.ID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "ID de reserva inválido.")
+		return
+	}
+	result := reservasCollection.FindOne(context.Background(), bson.M{"_id": objID})
+	if result == nil {
+		respondWithError(w, http.StatusNotFound, "Reserva não encontrada.")
+	}
+	var reserva ReservaDocument
+	if err := result.Decode(&reserva); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Erro ao decodificar reserva.")
+		return
+	}
+
+	payloadParaFila := bson.M{
+		"id":                dto.ID,
+		"destino":           reserva.Destino,
+		"sessionId":         sessionID,
+		"dataEmbarque":      reserva.DataEmbarque,
+		"numeroPassageiros": reserva.NumeroPassageiros,
+		"numeroCabines":     reserva.NumeroCabines,
+		"valorTotal":        reserva.ValorTotal,
+	}
+
+	reservaMsgBytes, err := json.Marshal(payloadParaFila)
+	if err != nil {
+		log.Printf("Erro ao fazer marshal da mensagem da reserva para RabbitMQ: %v", err)
+		// Respond to client, but log the MQ error. The reservation is in DB.
+		// Consider a retry mechanism for MQ or a compensating transaction.
+		respondWithJSON(w, http.StatusCreated, map[string]interface{}{
+			"mensagem":      "Reserva cancelada com SUCESSO, mas FALHA ao notificar.",
+		})
+		return
+	}
+
+	err = rabbitMQChannelGlobal.PublishWithContext(
+		context.Background(),
+		reservaCanceladaExchange, // exchange
+		"",                    // routing key (fanout ignores this)
+		false,                 // mandatory
+		false,                 // immediate
+		amqp.Publishing{
+			ContentType:  "application/json",
+			Body:         reservaMsgBytes,
+		})
+	if err != nil {
+		log.Printf("Erro ao publicar mensagem de reserva criada: %v", err)
+		// Similar to above, reservation is in DB.
+		respondWithJSON(w, http.StatusCreated, map[string]interface{}{
+			"mensagem":      "Reserva cancelada com SUCESSO, mas FALHA ao notificar (MQ).",
+		})
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, map[string]interface{}{
+		"mensagem":      "Reserva cancelada.",
+	})
+
+}
+
 func reservarDestinoHandler(w http.ResponseWriter, r *http.Request) {
 	var dto ReservaDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
@@ -642,7 +817,6 @@ func reservarDestinoHandler(w http.ResponseWriter, r *http.Request) {
 // --- Main Function ---
 func main() {
 	initMongoDB()
-	loadPublicKey() // Load public key after MongoDB init, before RabbitMQ consumer starts using it
 	initRabbitMQ()  // This also starts the pagamentoAprovado consumer in a goroutine
 
 	defer mongoClient.Disconnect(context.Background())
@@ -661,6 +835,7 @@ func main() {
 	r.HandleFunc("/destinos/buscar", buscarDestinosHandler).Methods(http.MethodPost)
 	r.HandleFunc("/destinos-por-categoria", destinosPorCategoriaHandler).Methods(http.MethodGet)
 	r.HandleFunc("/destinos/reservar", reservarDestinoHandler).Methods(http.MethodPost)
+	r.HandleFunc("/destinos/cancelar", cancelarViagemHandler).Methods(http.MethodPost)
 
 	// CORS middleware
 	// AllowedOrigins can be more specific in production
