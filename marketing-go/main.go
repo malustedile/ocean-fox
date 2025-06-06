@@ -17,7 +17,6 @@ import (
 
 type Inscricao struct {
     SessionId string    `bson:"sessionId" json:"sessionId"`
-    Destino   string    `bson:"destino" json:"destino"`
     CriadoEm  time.Time `bson:"criadoEm" json:"criadoEm"`
 }
 
@@ -25,8 +24,9 @@ type Promocao struct {
     SessionId string    `bson:"sessionId" json:"sessionId"`
     Mensagem  string    `bson:"mensagem" json:"mensagem"`
     CriadoEm  time.Time `bson:"criadoEm" json:"criadoEm"`
-    Destino   string    `bson:"destino" json:"destino"`
 }
+
+var consumers = make(map[string]chan struct{})
 
 func main() {
     ctx := context.Background()
@@ -81,18 +81,11 @@ func main() {
 
     app.Post("/inscrever", func(c *fiber.Ctx) error {
         sessionId := c.Cookies("sessionId")
-        var body struct {
-            Destino string `json:"destino"`
-        }
-        if err := c.BodyParser(&body); err != nil {
-            return err
-        }
-        exchange := "promocoes-" + body.Destino
+        exchange := "promocoes"
         channel.ExchangeDeclare(exchange, "fanout", false, false, false, false, nil)
 
         inscricoes.InsertOne(ctx, Inscricao{
             SessionId: sessionId,
-            Destino:   body.Destino,
             CriadoEm:  time.Now(),
         })
 
@@ -100,13 +93,24 @@ func main() {
         channel.QueueBind(queue.Name, "", exchange, false, nil)
 
         msgs, _ := channel.Consume(queue.Name, "", true, true, false, false, nil)
+
+        stopChan := make(chan struct{})
+        consumers[sessionId] = stopChan
+
         go func() {
-            for d := range msgs {
-                var promocao Promocao
-                json.Unmarshal(d.Body, &promocao)
-                promocao.SessionId = sessionId
-                promocoes.InsertOne(ctx, promocao)
-                fmt.Printf("Promoção recebida: %+v\n", promocao)
+            for {
+                select {
+                case d := <-msgs:
+                    var promocao Promocao
+                    json.Unmarshal(d.Body, &promocao)
+                    promocao.SessionId = sessionId
+                    promocoes.InsertOne(ctx, promocao)
+                    fmt.Printf("Promoção recebida: %+v\n", promocao)
+                case <-stopChan:
+                    // Cancela o consumo e deleta a fila
+                    channel.QueueDelete(queue.Name, false, false, false)
+                    return
+                }
             }
         }()
 
@@ -115,18 +119,16 @@ func main() {
 
     app.Post("/promocao", func(c *fiber.Ctx) error {
         var body struct {
-            Destino  string `json:"destino"`
             Mensagem string `json:"mensagem"`
         }
         if err := c.BodyParser(&body); err != nil {
             return err
         }
-        exchange := "promocoes-" + body.Destino
+        exchange := "promocoes"
         channel.ExchangeDeclare(exchange, "fanout", false, false, false, false, nil)
 
         promocao := Promocao{
             Mensagem: body.Mensagem,
-            Destino:  body.Destino,
             CriadoEm: time.Now(),
         }
         data, _ := json.Marshal(promocao)
@@ -138,5 +140,28 @@ func main() {
         return nil
     })
 
+    app.Post("/cancelar", func(c *fiber.Ctx) error {
+        sessionId := c.Cookies("sessionId")
+        if sessionId == "" {
+            return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "sessionId não encontrado"})
+        }
+
+        res, err := inscricoes.DeleteOne(ctx, bson.M{"sessionId": sessionId})
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+        }
+        if res.DeletedCount == 0 {
+            return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Inscrição não encontrada"})
+        }
+
+        // Para o consumo da fila
+        if stopChan, ok := consumers[sessionId]; ok {
+            close(stopChan)
+            delete(consumers, sessionId)
+        }
+
+        return c.JSON(fiber.Map{"success": true})
+    })
+    
     log.Fatal(app.Listen(":3004"))
 }

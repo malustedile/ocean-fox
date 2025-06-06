@@ -10,7 +10,12 @@ export const puxarPromocoes = async () => {
   return response.data;
 };
 
-export const inscrever = async (destino: string) => {
-  const response = await client.post("/inscrever", { destino });
+export const inscrever = async () => {
+  const response = await client.post("/inscrever");
+  return response.data;
+};
+
+export const cancelarInscricao = async () => {
+  const response = await client.post("/cancelar");
   return response.data;
 };

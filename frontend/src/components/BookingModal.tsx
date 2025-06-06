@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Trip } from "./FilteredTrips";
 import { reservarViagem } from "../api/destinos";
 import { CruiseDetails } from "./CruiseDetails";
+import { inscrever } from "../api/marketing";
 
 interface BookingModalProps {
   trip: Trip;
@@ -26,6 +27,7 @@ export const BookingModal = ({
       numeroCabines,
       valorTotal: Number(trip.descricao.valorPorPessoa) * numeroPassageiros,
     });
+    await inscrever();
     if (err) return;
   };
 
