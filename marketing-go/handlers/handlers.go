@@ -18,19 +18,12 @@ import (
 func MySubscriptions(c *fiber.Ctx) error {
 	ctx := context.Background()
 	sessionId := c.Cookies("sessionId")
-	var mySubscriptions []services.Inscricao
 	var myPromotions []services.Promocao
-
-	cursor, _ := services.CollectionInscricoes.Find(ctx, bson.M{"sessionId": sessionId})
-	cursor.All(ctx, &mySubscriptions)
 
 	cursor2, _ := services.CollectionPromocoes.Find(ctx, bson.M{"sessionId": sessionId})
 	cursor2.All(ctx, &myPromotions)
 
-	return c.JSON(fiber.Map{
-		"subscriptions": mySubscriptions,
-		"promotions":    myPromotions,
-	})
+	return c.JSON(myPromotions)
 }
 
 func Subscribe(c *fiber.Ctx) error {
