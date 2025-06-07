@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { cancelarInscricao, inscrever, puxarPromocoes } from "../api/marketing";
 
+export interface Subscriptions {
+  hasSubscription: boolean;
+  promotions: { mensagem: string }[];
+}
+
 export const Promocoes = () => {
-  const [promocoes, setPromocoes] = useState<[]>([]);
+  const [promocoes, setPromocoes] = useState<Subscriptions>({
+    hasSubscription: false,
+    promotions: [],
+  });
   const fetchPromotions = async () => {
     const res = await puxarPromocoes();
     setPromocoes(res);
@@ -15,7 +23,13 @@ export const Promocoes = () => {
     });
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log(data);
+
+      console.log(data.msg);
+      console.log(promocoes);
+      setPromocoes((prev) => ({
+        ...prev,
+        promotions: [{ mensagem: data.msg }, ...prev.promotions],
+      }));
     };
     return () => {
       eventSource.close();
@@ -44,16 +58,16 @@ export const PromotionsScreen = ({ promotions }: { promotions: any }) => {
         <div className="mx-2 mb-4">
           <button
             className="btn rounded-xl"
-            onClick={promotions?.length > 0 ? unsubscribe : subscribe}
+            onClick={promotions.hasSubscription > 0 ? unsubscribe : subscribe}
           >
-            {promotions?.length > 0 ? "Cancelar inscrição" : "Inscrever-se"}
+            {promotions.hasSubscription ? "Cancelar inscrição" : "Inscrever-se"}
           </button>
         </div>
       </div>
       <div>
         <div className="font-bold">Promoções</div>
         <div className="flex flex-col gap-8 my-2 mt-8">
-          {promotions?.map((s: any) => (
+          {promotions?.promotions?.map((s: any) => (
             <div className="flex justify-between bg-white p-4 px-12 pr-8 rounded-xl relative w-full">
               <div className="grid grid-cols-[1fr_2fr] gap-14 w-full">
                 <div>

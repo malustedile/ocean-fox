@@ -41,10 +41,7 @@ export const Carousel = () => {
   const [destinos, setDestinos] = useState([]);
   const [slide, setSlide] = useState(1);
 
-  const [promocoes, setPromocoes] = useState({
-    subscriptions: [],
-    promotions: [],
-  });
+  const [promocoes, setPromocoes] = useState<any[]>([]);
   const [destinosDeCategoria, setDestinosDeCategoria] = useState<Trip[]>([]);
 
   const categoriasDeDestinos = async () => {
@@ -121,10 +118,7 @@ export const Carousel = () => {
               {destinosDeCategoria.length} destinos encontrados
             </div>
           </div>
-          <FilteredTrips
-            filter={destinosDeCategoria}
-            subscriptions={promocoes.subscriptions}
-          />
+          <FilteredTrips filter={destinosDeCategoria} />
         </div>
       )}
     </div>

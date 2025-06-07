@@ -44,15 +44,26 @@ func Init() {
 	CollectionInscricoes = Db.Collection("inscricoes")
 	CollectionPromocoes = Db.Collection("promocoes")
 
-	// RabbitMQ
-    RabbitMQConn, err := amqp.Dial("amqp://localhost")
+	RabbitMQConn, err = amqp.Dial("amqp://localhost")
     if err != nil {
         log.Fatal(err)
     }
-    RabbitMQChannel, err := RabbitMQConn.Channel()
+    RabbitMQChannel, err = RabbitMQConn.Channel()
     if err != nil {
         log.Fatal(err)
     }
-    defer RabbitMQChannel.Close()
+
+    // Declare the "promocoes" queue (simple, durable)
+    _, err = RabbitMQChannel.QueueDeclare(
+        "promocoes", // name
+        true,        // durable
+        false,       // delete when unused
+        false,       // exclusive
+        false,       // no-wait
+        nil,         // arguments
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
 }
 

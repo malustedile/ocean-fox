@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"reserva-go/consumers"
 	h "reserva-go/handlers"
 	"reserva-go/services"
 
@@ -16,7 +17,7 @@ const httpServerAddress = ":3000"
 // --- Main Function ---
 func main() {
 	services.InitMongoDB()
-	services.InitRabbitMQ()  // This also starts the pagamentoAprovado consumer in a goroutine
+	consumers.InitRabbitMQ()  // This also starts the pagamentoAprovado consumer in a goroutine
 
 	defer services.MongoClient.Disconnect(context.Background())
 	defer services.RabbitMQConnection.Close()

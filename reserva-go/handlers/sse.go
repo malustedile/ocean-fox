@@ -95,17 +95,24 @@ func SSESendHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Missing required fields", http.StatusBadRequest)
         return
     }
-    payload := fmt.Sprintf(`{"sessionId":"%s","msg":"%s","eventType":"%s"}`, sseMsg.SessionID, sseMsg.Msg, sseMsg.EventType)
-
-    sseClientsMu.Lock()
-    if ch, ok := sseClients[sseMsg.SessionID]; ok {
-        select {
-        case ch <- payload:
-        default:
-        }
-    }
-    sseClientsMu.Unlock()
+	SendMessageToClient(sseMsg)
 
     w.WriteHeader(http.StatusOK)
     w.Write([]byte("Message sent"))
+}
+
+func SendMessageToClient(sseMsg SSEMessage) {
+	sseClientsMu.Lock()
+	payload := fmt.Sprintf(`{"sessionId":"%s","msg":"%s","eventType":"%s"}`, sseMsg.SessionID, sseMsg.Msg, sseMsg.EventType)
+	fmt.Print("Sending message to client: ", sseMsg.SessionID, "\n")
+
+	if ch, ok := sseClients[sseMsg.SessionID]; ok {
+		select {
+		case ch <- payload:
+			fmt.Print("Message sent to client: ", sseMsg.SessionID, "\n")
+		default:
+			// If channel is full, we skip sending to avoid blocking
+		}
+	}
+	sseClientsMu.Unlock()
 }

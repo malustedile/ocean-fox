@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -81,6 +79,12 @@ type ReservaDocument struct { // For MongoDB
 	PagamentoValido   *bool              `json:"pagamentoValido,omitempty" bson:"pagamentoValido,omitempty"` // Pointer to distinguish between false and not set
 	CriadoEm          time.Time          `json:"criadoEm" bson:"criadoEm"`
 }
+
+type Inscricao struct {
+    SessionId string    `bson:"sessionId" json:"sessionId"`
+    CriadoEm  time.Time `bson:"criadoEm" json:"criadoEm"`
+}
+
 
 
 type FiltrosDTO struct {
@@ -231,206 +235,4 @@ func DestinosPorCategoriaHandler(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 
 	RespondWithJSON(w, http.StatusOK, results)
-}
-
-func CancelarViagemHandler(w http.ResponseWriter, r *http.Request) {
-	var dto CancelamentoDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido.")
-		return
-	}
-
-	sessionCookie, err := r.Cookie("sessionId")
-	if err != nil || sessionCookie.Value == "" {
-		RespondWithError(w, http.StatusUnauthorized, "Cookie 'sessionId' inválido ou ausente.")
-		return
-	}
-	sessionID := sessionCookie.Value
-
-	if dto.ID == "" {
-		RespondWithError(w, http.StatusBadRequest, "Campos obrigatórios ausentes ou inválidos.")
-		return
-	}
-
-	log.Println("Cancelando reserva com ID:", dto.ID)
-	objID, err := primitive.ObjectIDFromHex(dto.ID)
-	if err != nil {
-		RespondWithError(w, http.StatusBadRequest, "ID de reserva inválido.")
-		return
-	}
-	result := services.ReservasCollection.FindOne(context.Background(), bson.M{"_id": objID})
-	if result == nil {
-		RespondWithError(w, http.StatusNotFound, "Reserva não encontrada.")
-	}
-	var reserva ReservaDocument
-	if err := result.Decode(&reserva); err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Erro ao decodificar reserva.")
-		return
-	}
-
-	payloadParaFila := bson.M{
-		"id":                dto.ID,
-		"destino":           reserva.Destino,
-		"sessionId":         sessionID,
-		"dataEmbarque":      reserva.DataEmbarque,
-		"numeroPassageiros": reserva.NumeroPassageiros,
-		"numeroCabines":     reserva.NumeroCabines,
-		"valorTotal":        reserva.ValorTotal,
-	}
-
-	reservaMsgBytes, err := json.Marshal(payloadParaFila)
-	if err != nil {
-		log.Printf("Erro ao fazer marshal da mensagem da reserva para RabbitMQ: %v", err)
-		// Respond to client, but log the MQ error. The reservation is in DB.
-		// Consider a retry mechanism for MQ or a compensating transaction.
-		RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-			"mensagem":      "Reserva cancelada com SUCESSO, mas FALHA ao notificar.",
-		})
-		return
-	}
-
-	err = services.RabbitMQChannelGlobal.PublishWithContext(
-		context.Background(),
-		services.ReservaCanceladaExchange, // exchange
-		"",                    // routing key (fanout ignores this)
-		false,                 // mandatory
-		false,                 // immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         reservaMsgBytes,
-		})
-	if err != nil {
-		log.Printf("Erro ao publicar mensagem de reserva criada: %v", err)
-		// Similar to above, reservation is in DB.
-		RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-			"mensagem":      "Reserva cancelada com SUCESSO, mas FALHA ao notificar (MQ).",
-		})
-		return
-	}
-
-	RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-		"mensagem":      "Reserva cancelada.",
-	})
-
-}
-
-func ReservarDestinoHandler(w http.ResponseWriter, r *http.Request) {
-	var dto ReservaDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido.")
-		return
-	}
-
-	sessionCookie, err := r.Cookie("sessionId")
-	if err != nil || sessionCookie.Value == "" {
-		RespondWithError(w, http.StatusUnauthorized, "Cookie 'sessionId' inválido ou ausente.")
-		return
-	}
-	sessionID := sessionCookie.Value
-
-	if dto.Destino == "" || dto.DataEmbarque == "" || dto.NumeroPassageiros <= 0 ||
-		dto.NumeroCabines <= 0 || dto.ValorTotal <= 0 {
-		RespondWithError(w, http.StatusBadRequest, "Campos obrigatórios ausentes ou inválidos.")
-		return
-	}
-
-	linkPagamento := fmt.Sprintf("https://pagamento.fake/checkout?token=%s", uuid.NewString())
-
-	reservaDoc := ReservaDocument{
-		ID:                primitive.NewObjectID(),
-		Destino:           dto.Destino,
-		SessionID:         sessionID,
-		DataEmbarque:      dto.DataEmbarque,
-		NumeroPassageiros: dto.NumeroPassageiros,
-		NumeroCabines:     dto.NumeroCabines,
-		ValorTotal:        dto.ValorTotal,
-		LinkPagamento:     linkPagamento,
-		Status:            "AGUARDANDO_PAGAMENTO",
-		CriadoEm:          time.Now().UTC(),
-	}
-
-	insertResult, err := services.ReservasCollection.InsertOne(context.Background(), reservaDoc)
-	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Erro ao registrar reserva.")
-		return
-	}
-
-	// Prepare payload for RabbitMQ (what was signed and sent)
-	// The JS code published {id: reserva.insertedId, ...reservaPayload}
-	// where reservaPayload was the initial set of data for the document.
-	// Here, reservaDoc already contains the ID and all fields.
-	
-	// Let's assume the `reserva-criada-exc` expects the *full* reserva document.
-	// However, the JS code example shows:
-	// JSON.stringify({ id: reserva.insertedId, ...reservaPayload })
-	// where reservaPayload is the one created *before* insertOne, but with generated link and status.
-	// For consistency, let's create what was sent.
-	type ReservaPublicada struct {
-		ID                string    `json:"id"` // ObjectID as hex string
-		Destino           string    `json:"destino"`
-		SessionID         string    `json:"sessionId"`
-		DataEmbarque      string    `json:"dataEmbarque"`
-		NumeroPassageiros int       `json:"numeroPassageiros"`
-		NumeroCabines     int       `json:"numeroCabines"`
-		ValorTotal        float64   `json:"valorTotal"`
-		LinkPagamento     string    `json:"linkPagamento"`
-		Status            string    `json:"status"`
-		Bilhete           *string   `json:"bilhete"` // null in JS
-		CriadoEm          string    `json:"criadoEm"` // ISOString
-	}
-	
-	payloadParaFila := ReservaPublicada{
-		ID: reservaDoc.ID.Hex(),
-		Destino: reservaDoc.Destino,
-		SessionID: reservaDoc.SessionID,
-		DataEmbarque: reservaDoc.DataEmbarque,
-		NumeroPassageiros: reservaDoc.NumeroPassageiros,
-		NumeroCabines: reservaDoc.NumeroCabines,
-		ValorTotal: reservaDoc.ValorTotal,
-		LinkPagamento: reservaDoc.LinkPagamento,
-		Status: reservaDoc.Status,
-		Bilhete: nil, // Explicitly nil as in JS
-		CriadoEm: reservaDoc.CriadoEm.Format(time.RFC3339Nano),
-	}
-
-
-	reservaMsgBytes, err := json.Marshal(payloadParaFila)
-	if err != nil {
-		log.Printf("Erro ao fazer marshal da mensagem da reserva para RabbitMQ: %v", err)
-		// Respond to client, but log the MQ error. The reservation is in DB.
-		// Consider a retry mechanism for MQ or a compensating transaction.
-		RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-			"mensagem":      "Reserva registrada com SUCESSO, mas FALHA ao notificar. Link de pagamento gerado.",
-			"linkPagamento": linkPagamento,
-			"reservaId":     insertResult.InsertedID,
-		})
-		return
-	}
-
-	err = services.RabbitMQChannelGlobal.PublishWithContext(
-		context.Background(),
-		services.ReservaCriadaExchange, // exchange
-		"",                    // routing key (fanout ignores this)
-		false,                 // mandatory
-		false,                 // immediate
-		amqp.Publishing{
-			ContentType:  "application/json",
-			Body:         reservaMsgBytes,
-		})
-	if err != nil {
-		log.Printf("Erro ao publicar mensagem de reserva criada: %v", err)
-		// Similar to above, reservation is in DB.
-		RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-			"mensagem":      "Reserva registrada com SUCESSO, mas FALHA ao notificar (MQ). Link de pagamento gerado.",
-			"linkPagamento": linkPagamento,
-			"reservaId":     insertResult.InsertedID,
-		})
-		return
-	}
-
-	RespondWithJSON(w, http.StatusCreated, map[string]interface{}{
-		"mensagem":      "Reserva registrada. Link de pagamento gerado.",
-		"linkPagamento": linkPagamento,
-		"reservaId":     insertResult.InsertedID,
-	})
 }

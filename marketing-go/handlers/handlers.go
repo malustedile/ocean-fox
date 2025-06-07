@@ -1,115 +1,152 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"marketing/services"
+	"sort"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
-
 	"github.com/gofiber/fiber/v2"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-
-
+// Função auxiliar para obter sessionId e validar
+func getSessionId(c *fiber.Ctx) (string, error) {
+    sessionId := c.Cookies("sessionId")
+    if sessionId == "" {
+        return "", fmt.Errorf("sessionId não encontrado")
+    }
+    return sessionId, nil
+}
 func MySubscriptions(c *fiber.Ctx) error {
-	ctx := context.Background()
-	sessionId := c.Cookies("sessionId")
-	var myPromotions []services.Promocao
+    ctx := c.Context()
+    sessionId, err := getSessionId(c)
+    if err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"hasSubscription": false, "promotions": []services.Promocao{}})
+    }
+    var myPromotions []services.Promocao
 
-	cursor2, _ := services.CollectionPromocoes.Find(ctx, bson.M{"sessionId": sessionId})
-	cursor2.All(ctx, &myPromotions)
+    var inscricao services.Inscricao
+    err = services.CollectionInscricoes.FindOne(ctx, bson.M{"sessionId": sessionId}).Decode(&inscricao)
+    if err != nil {
+        return c.JSON(fiber.Map{
+            "hasSubscription": false,
+            "promotions":      []services.Promocao{},
+        })
+    }
 
-	return c.JSON(myPromotions)
+    cursor, err := services.CollectionPromocoes.Find(ctx, bson.M{
+        "criadoEm": bson.M{"$gt": inscricao.CriadoEm},
+    })
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"hasSubscription": true, "promotions": []services.Promocao{}})
+    }
+    defer cursor.Close(ctx)
+    if err := cursor.All(ctx, &myPromotions); err != nil {
+        return c.Status(500).JSON(fiber.Map{"hasSubscription": true, "promotions": []services.Promocao{}})
+    }
+
+    // Ordena as promoções por CriadoEm decrescente
+    sort.Slice(myPromotions, func(i, j int) bool {
+        return myPromotions[i].CriadoEm.After(myPromotions[j].CriadoEm)
+    })
+
+    return c.JSON(fiber.Map{
+        "hasSubscription": true,
+        "promotions":      myPromotions,
+    })
 }
 
 func Subscribe(c *fiber.Ctx) error {
-	ctx := context.Background()
+    ctx := c.Context()
+    sessionId, err := getSessionId(c)
+    if err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
+    }
 
-	sessionId := c.Cookies("sessionId")
-	exchange := "promocoes"
-	services.RabbitMQChannel.ExchangeDeclare(exchange, "fanout", false, false, false, false, nil)
+    count, err := services.CollectionInscricoes.CountDocuments(ctx, bson.M{"sessionId": sessionId})
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"success": false, "error": "Erro ao verificar inscrição"})
+    }
+    if count > 0 {
+        return c.JSON(fiber.Map{"success": false, "message": "Já inscrito"})
+    }
 
-	services.CollectionInscricoes.InsertOne(ctx, services.Inscricao{
-		SessionId: sessionId,
-		CriadoEm:  time.Now(),
-	})
+    _, err = services.CollectionInscricoes.InsertOne(ctx, services.Inscricao{
+        SessionId: sessionId,
+        CriadoEm:  time.Now(),
+    })
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"success": false, "error": "Erro ao inscrever"})
+    }
 
-	queue, _ := services.RabbitMQChannel.QueueDeclare("", false, true, true, false, nil)
-	services.RabbitMQChannel.QueueBind(queue.Name, "", exchange, false, nil)
-
-	msgs, _ := services.RabbitMQChannel.Consume(queue.Name, "", true, true, false, false, nil)
-
-	stopChan := make(chan struct{})
-	services.RabbitMQconsumers[sessionId] = stopChan
-
-	go func() {
-		for {
-			select {
-			case d := <-msgs:
-				var promocao services.Promocao
-				json.Unmarshal(d.Body, &promocao)
-				promocao.SessionId = sessionId
-				services.CollectionPromocoes.InsertOne(ctx, promocao)
-				fmt.Printf("Promoção recebida: %+v\n", promocao)
-			case <-stopChan:
-				// Cancela o consumo e deleta a fila
-					services.RabbitMQChannel.QueueDelete(queue.Name, false, false, false)
-				return
-			}
-		}
-	}()
-
-	return c.JSON(fiber.Map{"success": true})
+    return c.JSON(fiber.Map{"success": true})
 }
 
 func CreatePromotion(c *fiber.Ctx) error {
-	var body struct {
-		Mensagem string `json:"mensagem"`
-	}
-	if err := c.BodyParser(&body); err != nil {
-		return err
-	}
-	exchange := "promocoes"
-	services.RabbitMQChannel.ExchangeDeclare(exchange, "fanout", false, false, false, false, nil)
+    ctx := c.Context()
 
-	promocao := services.Promocao{
-		Mensagem: body.Mensagem,
-		CriadoEm: time.Now(),
-	}
-	data, _ := json.Marshal(promocao)
-	services.RabbitMQChannel.Publish(exchange, "", false, false, amqp.Publishing{
-		ContentType: "application/json",
-		Body:        data,
-	})
-	fmt.Printf("[Publisher] Promoção enviada para exchange %s: %s\n", exchange, body.Mensagem)
-	return nil
+    var body struct {
+        Mensagem string `json:"mensagem"`
+    }
+    if err := c.BodyParser(&body); err != nil || body.Mensagem == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Mensagem inválida"})
+    }
+
+    if services.RabbitMQChannel == nil {
+        return c.Status(500).JSON(fiber.Map{"error": "RabbitMQ channel not initialized"})
+    }
+
+    promocao := services.Promocao{
+        Mensagem: body.Mensagem,
+        CriadoEm: time.Now(),
+    }
+
+    _, err := services.CollectionPromocoes.InsertOne(ctx, promocao)
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": "Erro ao salvar promoção"})
+    }
+
+    data, _ := json.Marshal(promocao)
+
+    err = services.RabbitMQChannel.Publish(
+        "",          // exchange vazio para fila simples
+        "promocoes", // routing key = nome da fila
+        false,
+        false,
+        amqp.Publishing{
+            ContentType: "application/json",
+            Body:        data,
+        },
+    )
+    if err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+    fmt.Printf("[Publisher] Promoção enviada para fila promocoes: %s\n", body.Mensagem)
+    return c.JSON(fiber.Map{"success": true})
 }
 
 func CancelSubscription(c *fiber.Ctx) error {
-	ctx := context.Background()
+    ctx := c.Context()
+    sessionId, err := getSessionId(c)
+    if err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
+    }
 
-	sessionId := c.Cookies("sessionId")
-	if sessionId == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": "sessionId não encontrado"})
-	}
+    res, err := services.CollectionInscricoes.DeleteMany(ctx, bson.M{"sessionId": sessionId})
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
+    }
+    if res.DeletedCount == 0 {
+        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Inscrição não encontrada"})
+    }
 
-	res, err := services.CollectionInscricoes.DeleteOne(ctx, bson.M{"sessionId": sessionId})
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
-	}
-	if res.DeletedCount == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"success": false, "error": "Inscrição não encontrada"})
-	}
+    if stopChan, ok := services.RabbitMQconsumers[sessionId]; ok {
+        close(stopChan)
+        delete(services.RabbitMQconsumers, sessionId)
+    }
 
-	// Para o consumo da fila
-	if stopChan, ok := services.RabbitMQconsumers[sessionId]; ok {
-		close(stopChan)
-		delete(services.RabbitMQconsumers, sessionId)
-	}
-
-	return c.JSON(fiber.Map{"success": true})
+    return c.JSON(fiber.Map{"success": true})
 }

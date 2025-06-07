@@ -17,13 +17,7 @@ export interface Trip {
   };
 }
 
-export const FilteredTrips = ({
-  filter,
-  subscriptions,
-}: {
-  filter: Trip[];
-  subscriptions: any[];
-}) => {
+export const FilteredTrips = ({ filter }: { filter: Trip[] }) => {
   const [openBookingModal, setOpenBookingModal] = useState(false);
   const [trip, setTrip] = useState<Trip>();
 
@@ -34,7 +28,7 @@ export const FilteredTrips = ({
           index={index}
           trip={trip}
           setTrip={setTrip}
-          subscripted={subscriptions?.some((s) => s.destino === trip.nome)}
+          subscripted={false}
           setOpenBookingModal={setOpenBookingModal}
         />
       ))}
