@@ -7,27 +7,27 @@ sudo fuser -k 3005/tcp
 sudo fuser -k 5173/tcp
 
 echo "Iniciando Pagamento..."
-(cd pagamento-go && go run main.go > ../pagamento.log 2>&1) &
+(cd backend/pagamento-go && go run main.go > ../../logs/pagamento.log 2>&1) &
 PID_PAGAMENTO=$!
 echo "Pagamento iniciado (PID: $PID_PAGAMENTO). Verifique pagamento.log."
 
 echo "Iniciando Marketing..."
-(cd marketing-go && go run main.go > ../marketing.log 2>&1) &
+(cd backend/marketing && go run main.go > ../../logs/marketing.log 2>&1) &
 PID_MARKETING=$!
 echo "Marketing iniciado (PID: $PID_MARKETING). Verifique marketing.log."
 
 echo "Iniciando Bilhete..."
-(cd bilhete && go run main.go > ../bilhete.log 2>&1) &
+(cd backend/bilhete && go run main.go > ../../logs/bilhete.log 2>&1) &
 PID_BILHETE=$!
 echo "Bilhete iniciado (PID: $PID_BILHETE). Verifique bilhete.log."
 
 echo "Iniciando Reserva..."
-(cd reserva-go && go run main.go > ../reserva.log 2>&1) &
+(cd backend/reserva && go run main.go > ../../logs/reserva.log 2>&1) &
 PID_RESERVA=$!
 echo "Bilhete iniciado (PID: $PID_RESERVA). Verifique reserva.log."
 
 echo "Iniciando Session..."
-(cd session-go && go run main.go > ../session.log 2>&1) &
+(cd backend/session && go run main.go > ../../logs/session.log 2>&1) &
 PID_SESSION=$!
 echo "Bilhete iniciado (PID: $PID_SESSION). Verifique session.log."
 
