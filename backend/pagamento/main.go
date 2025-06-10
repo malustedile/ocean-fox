@@ -233,7 +233,7 @@ func solicitarLinkSistemaExterno(solicitacao SolicitacaoPagamentoRequest, sessio
     }
     
     req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("Session-ID", sessionID)
+    req.AddCookie(&http.Cookie{Name: "sessionId", Value: sessionID})
 
     client := &http.Client{}
     resp, err := client.Do(req)

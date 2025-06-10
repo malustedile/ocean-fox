@@ -39,11 +39,12 @@ type ProcessarPagamentoRequest struct {
 }
 
 func LinkPagamentoHandler(w http.ResponseWriter, r *http.Request) {
-    sessionID := r.Header.Get("Session-ID")
-    if sessionID == "" {
+    sessionId, err := r.Cookie("sessionId")
+    if err != nil {
         http.Error(w, "Session-ID header is required", http.StatusBadRequest)
         return
     }
+    var sessionID = sessionId.Value
 
     var pagamentoReq PagamentoRequest
     if err := json.NewDecoder(r.Body).Decode(&pagamentoReq); err != nil {
@@ -66,6 +67,8 @@ func LinkPagamentoHandler(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(response)
+    log.Printf("Link de pagamento gerado: %s", response.Link)
+    log.Printf("Notificação de pagamento: %+v", notificacao)
 }
 
 func ProcessarPagamentoHandler(w http.ResponseWriter, r *http.Request) {
