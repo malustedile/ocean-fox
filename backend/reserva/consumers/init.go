@@ -11,11 +11,6 @@ var (
     ReservaCriadaExchange     = "reserva-criada-exc"
     reservaCanceladaQueue     = "reserva-cancelada"
     ReservaCanceladaExchange  = "reserva-cancelada-exc"
-    pagamentoAprovadoExchange = "pagamento-aprovado-exc"
-    pagamentoAprovadoRK       = "pagamento-aprovado"
-    pagamentoRecusadoQueue    = "pagamento-recusado"
-    pagamentoRecusadoExchange = "pagamento-recusado-exc"
-    pagamentoRecusadoRK       = "pagamento-recusado"
     bilheteGeradoQueue        = "bilhete-gerado"
 )
 
@@ -54,22 +49,6 @@ func InitRabbitMQ() {
     declareQueue(chReservaCancelada, reservaCanceladaQueue, true, false)
     declareExchange(services.RabbitMQChannelGlobal, ReservaCanceladaExchange, "fanout", false)
     bindQueue(chReservaCancelada, reservaCanceladaQueue, "", ReservaCanceladaExchange)
-
-    // Pagamento Aprovado
-    chPagamentoAprovado, err := services.RabbitMQConnection.Channel()
-    failOnError(err, "Failed to open channel for pagamento aprovado")
-    declareExchange(chPagamentoAprovado, pagamentoAprovadoExchange, "direct", true)
-    qPagamentoAprovado := declareQueue(chPagamentoAprovado, "", true, true)
-    bindQueue(chPagamentoAprovado, qPagamentoAprovado.Name, pagamentoAprovadoRK, pagamentoAprovadoExchange)
-    go consumePagamentoAprovado(chPagamentoAprovado, qPagamentoAprovado.Name)
-
-    // Pagamento Recusado
-    chPagamentoRecusado, err := services.RabbitMQConnection.Channel()
-    failOnError(err, "Failed to open channel for pagamento recusado")
-    declareExchange(chPagamentoRecusado, pagamentoRecusadoExchange, "direct", true)
-    qPagamentoRecusado := declareQueue(chPagamentoRecusado, pagamentoRecusadoQueue, true, false)
-    bindQueue(chPagamentoRecusado, qPagamentoRecusado.Name, pagamentoRecusadoRK, pagamentoRecusadoExchange)
-    go consumePagamentoRecusado(chPagamentoRecusado, qPagamentoRecusado.Name)
 
     // Promoções
     chPromocoes, err := services.RabbitMQConnection.Channel()

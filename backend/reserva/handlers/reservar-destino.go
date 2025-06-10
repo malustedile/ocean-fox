@@ -1,15 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
-	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"reserva-go/services"
 	"time"
 
-	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -33,12 +34,29 @@ func ReservarDestinoHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     ctx := r.Context()
-    linkPagamento := fmt.Sprintf("https://pagamento.fake/checkout?token=%s", uuid.NewString())
-    reservaDoc := NovaReservaDocument(dto, sessionID, linkPagamento)
+    reservaDoc := NovaReservaDocument(dto, sessionID, "")
 
     insertResult, err := services.ReservasCollection.InsertOne(ctx, reservaDoc)
     if err != nil {
         RespondWithError(w, http.StatusInternalServerError, "Erro ao registrar reserva.")
+        return
+    }
+
+    oid, ok := insertResult.InsertedID.(primitive.ObjectID)
+    if !ok {
+        RespondWithError(w, http.StatusInternalServerError, "Erro ao converter ID da reserva.")
+        return
+    }
+    linkPagamento := gerarLinkPagamento(dto.ValorTotal, oid.Hex(), sessionID)
+    if linkPagamento == "" {
+        RespondWithError(w, http.StatusInternalServerError, "Erro ao gerar link de pagamento.")
+        return
+    }
+    reservaDoc.LinkPagamento = linkPagamento
+    _, err = services.ReservasCollection.UpdateOne(ctx, bson.M{"_id": oid}, bson.M{"$set": reservaDoc})
+    if err != nil {
+        log.Printf("Erro ao atualizar reserva com link de pagamento: %v", err)
+        ResponderReservaComAviso(w, linkPagamento, insertResult.InsertedID, "SUCESSO, mas FALHA ao atualizar reserva.")
         return
     }
 
@@ -151,4 +169,57 @@ func ResponderReservaComAviso(w http.ResponseWriter, linkPagamento string, reser
         "linkPagamento": linkPagamento,
         "reservaId":     reservaId,
     })
+}
+
+func gerarLinkPagamento(valorTotal float64, IDReserva string, sessionID string) string {
+    sistemaExternoURL := "http://localhost:3001/gerar-link"
+    
+    requestData := map[string]interface{}{
+        "idReserva":  IDReserva,
+        "valorTotal": valorTotal,
+    }
+    
+    jsonData, err := json.Marshal(requestData)
+    if err != nil {
+        log.Println("Erro ao serializar dados da solicitação:", err)
+        return ""
+    }
+
+    req, err := http.NewRequest("POST", sistemaExternoURL, bytes.NewBuffer(jsonData))
+    if err != nil {
+        log.Println("Erro ao criar requisição:", err)
+        return ""
+    }
+    
+    req.Header.Set("Content-Type", "application/json")
+    req.AddCookie(&http.Cookie{Name: "sessionId", Value: sessionID})
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Println("Erro ao enviar requisição:", err)
+        return ""
+    }
+    defer resp.Body.Close()
+
+    var response map[string]interface{}
+    bodyBytes, err := io.ReadAll(resp.Body)
+    if err != nil {
+        log.Println("Erro ao ler resposta do sistema externo:", err)
+        return ""
+    }
+    
+    if err := json.Unmarshal(bodyBytes, &response); err != nil {
+        log.Println("Erro ao decodificar resposta do sistema externo:", err)
+        return ""
+    }
+
+    log.Printf("Resposta do sistema externo: %v", response)
+    link, ok := response["linkPagamento"].(string)
+    if !ok {
+        log.Println("Campo 'linkPagamento' não encontrado ou não é string")
+        return ""
+    }
+
+    return link
 }
