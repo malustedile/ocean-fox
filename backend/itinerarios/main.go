@@ -3,12 +3,17 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"sync"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -40,6 +45,36 @@ type MensagemReserva struct {
 	Destino   		string `json:"destino"`
 	NumeroCabines   int    `json:"numeroCabines"`
 }
+
+// Categorias (equivalent to enum)
+type Categoria string
+
+const (
+	CategoriaBrasil         Categoria = "Brasil"
+	CategoriaAmericaDoSul   Categoria = "América do Sul"
+	CategoriaCaribe         Categoria = "Caribe"
+	CategoriaAmericaDoNorte Categoria = "América do Norte"
+	CategoriaAfrica         Categoria = "África"
+	CategoriaOrienteMedio   Categoria = "Oriente Médio"
+	CategoriaAsia           Categoria = "Ásia"
+	CategoriaMediterraneo   Categoria = "Mediterrâneo"
+	CategoriaEscandinavia   Categoria = "Escandinávia"
+	CategoriaOceania        Categoria = "Oceania"
+)
+
+var AllCategorias = []Categoria{
+	CategoriaBrasil, CategoriaAmericaDoSul, CategoriaCaribe, CategoriaAmericaDoNorte,
+	CategoriaAfrica, CategoriaOrienteMedio, CategoriaAsia, CategoriaMediterraneo,
+	CategoriaEscandinavia, CategoriaOceania,
+}
+
+type FiltrosDTO struct {
+	Destino   *string    `json:"destino"`
+	Mes       *string    `json:"mes"`
+	Embarque  *string    `json:"embarque"`
+	Categoria *string `json:"categoria"`
+}
+
 
 func main() {
 
@@ -85,28 +120,106 @@ func main() {
 	r := mux.NewRouter()
 
 	// Rotas com método explícito
-	r.HandleFunc("/destinos", listarDestinosHandler).Methods("GET")
+	r.HandleFunc("/destinos-por-categoria", destinosPorCategoriaHandler).Methods("GET")
+	r.HandleFunc("/destinos/buscar", BuscarDestinosHandler).Methods("POST")
 	r.HandleFunc("/destinos", criarDestinoHandler).Methods("POST")
 
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"http://localhost:5173"}), // Or specify your frontend domain(s)
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-Requested-With"}),
+		handlers.AllowCredentials(), // Important if you use cookies/auth headers from frontend
+	)
+
 	log.Println("Servidor iniciado em :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	if err := http.ListenAndServe(":8080", corsHandler(r)); err != nil {
+		log.Fatalf("Could not start server: %s\n", err.Error())
+	}
 }
 
-// Handler GET /destinos
-func listarDestinosHandler(w http.ResponseWriter, r *http.Request) {
-	cursor, err := db.Collection("destinos").Find(context.TODO(), bson.M{})
+
+func BuscarDestinosHandler(w http.ResponseWriter, r *http.Request) {
+	var dto FiltrosDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido.")
+		return
+	}
+
+	filter := bson.M{}
+	if dto.Destino != nil && *dto.Destino != "" {
+		filter["descricao.lugaresVisitados"] = bson.M{
+			"$elemMatch": bson.M{"$regex": primitive.Regex{Pattern: *dto.Destino, Options: "i"}},
+		}
+	}
+	if dto.Embarque != nil && *dto.Embarque != "" {
+		filter["descricao.embarque"] = bson.M{"$regex": primitive.Regex{Pattern: *dto.Embarque, Options: "i"}}
+	}
+	if dto.Mes != nil && *dto.Mes != "" {
+		mesNum, err := strconv.Atoi(*dto.Mes)
+		if err == nil && mesNum >= 1 && mesNum <= 12 {
+			// Regex for YYYY-MM-DD or similar, matching the month part.
+			// Example: "-06-" for June. This regex is specific to date formats "YYYY-MM-DD".
+			monthPattern := fmt.Sprintf("-%02d-", mesNum)
+			filter["descricao.datasDisponiveis"] = bson.M{
+				"$elemMatch": bson.M{"$regex": primitive.Regex{Pattern: monthPattern, Options: ""}},
+			}
+		}
+	}
+	if dto.Categoria != nil && *dto.Categoria != "" {
+		filter["categoria"] = bson.M{"$regex": primitive.Regex{Pattern: string(*dto.Categoria), Options: "i"}}
+	}
+
+	cursor, err := db.Collection("destinos").Find(context.Background(), filter)
 	if err != nil {
-		http.Error(w, "Erro ao buscar destinos", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Erro ao buscar destinos.")
 		return
 	}
-	var destinos []Destino
-	if err := cursor.All(context.TODO(), &destinos); err != nil {
-		http.Error(w, "Erro ao processar destinos", http.StatusInternalServerError)
+	defer cursor.Close(context.Background())
+
+	var results []Destino
+	if err = cursor.All(context.Background(), &results); err != nil {
+		RespondWithError(w, http.StatusInternalServerError, "Erro ao decodificar destinos.")
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(destinos)
+	if results == nil {
+		results = []Destino{}
+	}
+	RespondWithJSON(w, http.StatusOK, results)
 }
+
+func destinosPorCategoriaHandler(w http.ResponseWriter, r *http.Request) {
+
+	type CategoriaCount struct {
+		Categoria  Categoria `json:"categoria"`
+		Quantidade int64     `json:"quantidade"`
+	}
+	results := []CategoriaCount{}
+
+	// Using a WaitGroup if parallel execution is desired, but for a small list of categories, sequential is fine.
+	var wg sync.WaitGroup
+	var mu sync.Mutex // To protect shared 'results' slice if running in parallel
+
+	for _, cat := range AllCategorias {
+		wg.Add(1)
+		go func(c Categoria) {
+			defer wg.Done()
+			count, err :=  db.Collection("destinos").CountDocuments(context.Background(), bson.M{"categoria": c})
+			if err != nil {
+				log.Printf("Erro ao contar documentos para categoria %s: %v", c, err)
+				// Optionally handle error, e.g., return count 0 or skip
+				return
+			}
+			mu.Lock()
+			results = append(results, CategoriaCount{Categoria: c, Quantidade: count})
+			mu.Unlock()
+		}(cat)
+	}
+	wg.Wait()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+
 
 // Handler POST /destinos
 func criarDestinoHandler(w http.ResponseWriter, r *http.Request) {
@@ -194,4 +307,22 @@ func consumirExchange(ch *amqp.Channel, exchange string, cancelar bool) {
 			log.Printf("Destino %s atualizado (exchange %s): %d cabines", res.Destino, exchange, -qtd)
 		}
 	}
+}
+
+func RespondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Error marshalling JSON response: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"erro": "Erro interno ao gerar resposta JSON"}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
+}
+
+
+func RespondWithError(w http.ResponseWriter, code int, message string) {
+	RespondWithJSON(w, code, map[string]string{"erro": message})
 }

@@ -32,8 +32,6 @@ func main() {
 	r.HandleFunc("/", h.HelloHandler).Methods(http.MethodGet)
 	r.HandleFunc("/minhas-reservas", h.MinhasReservasHandler).Methods(http.MethodGet)
 	r.HandleFunc("/destinos", h.CriarDestinoHandler).Methods(http.MethodPost)
-	r.HandleFunc("/destinos/buscar", h.BuscarDestinosHandler).Methods(http.MethodPost)
-	r.HandleFunc("/destinos-por-categoria", h.DestinosPorCategoriaHandler).Methods(http.MethodGet)
 	r.HandleFunc("/destinos/reservar", h.ReservarDestinoHandler).Methods(http.MethodPost)
 	r.HandleFunc("/destinos/cancelar", h.CancelarViagemHandler).Methods(http.MethodPost)
     r.HandleFunc("/sse", h.SSEHandler).Methods(http.MethodGet)

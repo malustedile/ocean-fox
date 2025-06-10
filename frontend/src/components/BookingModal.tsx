@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Trip } from "./FilteredTrips";
-import { reservarViagem } from "../api/destinos";
+import { reservarViagem } from "../api/reserva";
 import { CruiseDetails } from "./CruiseDetails";
 import { inscrever } from "../api/marketing";
 

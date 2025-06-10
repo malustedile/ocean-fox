@@ -11,10 +11,10 @@ import {
 import { CarouselItem } from "./CarouselItem";
 import { TbBuildingBurjAlArab } from "react-icons/tb";
 import { IoSnowOutline } from "react-icons/io5";
-import { destinosPorCategoria, puxarDestinos } from "../api/destinos";
 import { useEffect, useState } from "react";
 import { FilteredTrips, Trip } from "./FilteredTrips";
 import { puxarPromocoes } from "../api/marketing";
+import { destinosPorCategoria, puxarDestinos } from "../api/destino";
 
 export const iconsCategorias = {
   Brasil: <GiBrazilFlag size={30} className="text-[#007090]" />,

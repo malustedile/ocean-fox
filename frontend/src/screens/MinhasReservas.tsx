@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { minhasReservas } from "../api/destinos";
+import { minhasReservas } from "../api/reserva";
 import { MdOutlineFileDownload } from "react-icons/md";
 
 export const MinhasReservas = () => {

@@ -3,12 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 	"reserva-go/services"
-	"strconv"
-	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -31,11 +27,6 @@ const (
 	CategoriaOceania        Categoria = "Oceania"
 )
 
-var AllCategorias = []Categoria{
-	CategoriaBrasil, CategoriaAmericaDoSul, CategoriaCaribe, CategoriaAmericaDoNorte,
-	CategoriaAfrica, CategoriaOrienteMedio, CategoriaAsia, CategoriaMediterraneo,
-	CategoriaEscandinavia, CategoriaOceania,
-}
 
 type DescricaoDestino struct {
 	DatasDisponiveis []string `json:"datasDisponiveis" bson:"datasDisponiveis"`
@@ -85,14 +76,6 @@ type Inscricao struct {
     CriadoEm  time.Time `bson:"criadoEm" json:"criadoEm"`
 }
 
-
-
-type FiltrosDTO struct {
-	Destino   *string    `json:"destino"`
-	Mes       *string    `json:"mes"`
-	Embarque  *string    `json:"embarque"`
-	Categoria *string `json:"categoria"`
-}
 
 
 func HelloHandler(w http.ResponseWriter, r *http.Request) {
@@ -155,84 +138,4 @@ func CriarDestinoHandler(w http.ResponseWriter, r *http.Request) {
 		"mensagem": "Destino adicionado com sucesso",
 		"id":       result.InsertedID,
 	})
-}
-
-func BuscarDestinosHandler(w http.ResponseWriter, r *http.Request) {
-	var dto FiltrosDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		RespondWithError(w, http.StatusBadRequest, "Corpo da requisição inválido.")
-		return
-	}
-
-	filter := bson.M{}
-	if dto.Destino != nil && *dto.Destino != "" {
-		filter["descricao.lugaresVisitados"] = bson.M{
-			"$elemMatch": bson.M{"$regex": primitive.Regex{Pattern: *dto.Destino, Options: "i"}},
-		}
-	}
-	if dto.Embarque != nil && *dto.Embarque != "" {
-		filter["descricao.embarque"] = bson.M{"$regex": primitive.Regex{Pattern: *dto.Embarque, Options: "i"}}
-	}
-	if dto.Mes != nil && *dto.Mes != "" {
-		mesNum, err := strconv.Atoi(*dto.Mes)
-		if err == nil && mesNum >= 1 && mesNum <= 12 {
-			// Regex for YYYY-MM-DD or similar, matching the month part.
-			// Example: "-06-" for June. This regex is specific to date formats "YYYY-MM-DD".
-			monthPattern := fmt.Sprintf("-%02d-", mesNum)
-			filter["descricao.datasDisponiveis"] = bson.M{
-				"$elemMatch": bson.M{"$regex": primitive.Regex{Pattern: monthPattern, Options: ""}},
-			}
-		}
-	}
-	if dto.Categoria != nil && *dto.Categoria != "" {
-		filter["categoria"] = bson.M{"$regex": primitive.Regex{Pattern: string(*dto.Categoria), Options: "i"}}
-	}
-
-	cursor, err := services.DestinosCollection.Find(context.Background(), filter)
-	if err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Erro ao buscar destinos.")
-		return
-	}
-	defer cursor.Close(context.Background())
-
-	var results []Destino
-	if err = cursor.All(context.Background(), &results); err != nil {
-		RespondWithError(w, http.StatusInternalServerError, "Erro ao decodificar destinos.")
-		return
-	}
-	if results == nil {
-		results = []Destino{}
-	}
-	RespondWithJSON(w, http.StatusOK, results)
-}
-
-func DestinosPorCategoriaHandler(w http.ResponseWriter, r *http.Request) {
-	type CategoriaCount struct {
-		Categoria  Categoria `json:"categoria"`
-		Quantidade int64     `json:"quantidade"`
-	}
-	results := []CategoriaCount{}
-
-	// Using a WaitGroup if parallel execution is desired, but for a small list of categories, sequential is fine.
-	var wg sync.WaitGroup
-	var mu sync.Mutex // To protect shared 'results' slice if running in parallel
-
-	for _, cat := range AllCategorias {
-		wg.Add(1)
-		go func(c Categoria) {
-			defer wg.Done()
-			count, err := services.DestinosCollection.CountDocuments(context.Background(), bson.M{"categoria": c})
-			if err != nil {
-				log.Printf("Erro ao contar documentos para categoria %s: %v", c, err)
-				// Optionally handle error, e.g., return count 0 or skip
-				return
-			}
-			mu.Lock()
-			results = append(results, CategoriaCount{Categoria: c, Quantidade: count})
-			mu.Unlock()
-		}(cat)
-	}
-	wg.Wait()
-
-	RespondWithJSON(w, http.StatusOK, results)
 }

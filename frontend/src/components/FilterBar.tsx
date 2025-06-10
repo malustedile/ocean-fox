@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { IoSearch } from "react-icons/io5";
-import { puxarDestinos } from "../api/destinos";
+import { puxarDestinos } from "../api/destino";
 
 interface FilterBarProps {
   setFilter: React.Dispatch<React.SetStateAction<any>>;
