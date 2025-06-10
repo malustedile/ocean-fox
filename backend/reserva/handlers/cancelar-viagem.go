@@ -44,6 +44,15 @@ func CancelarViagemHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Atualiza o status para "cancelado"
+    update := bson.M{"$set": bson.M{"status": "cancelado"}}
+    _, err = services.ReservasCollection.UpdateOne(r.Context(), bson.M{"_id": objID}, update)
+    if err != nil {
+        log.Printf("[CancelarViagem] Erro ao atualizar status da reserva: %v", err)
+        RespondWithError(w, http.StatusInternalServerError, "Erro ao cancelar a reserva.")
+        return
+    }
+
     payloadParaFila := bson.M{
         "id":                dto.ID,
         "destino":           reserva.Destino,

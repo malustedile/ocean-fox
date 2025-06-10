@@ -5,6 +5,7 @@ sudo fuser -k 3003/tcp
 sudo fuser -k 3004/tcp
 sudo fuser -k 3005/tcp
 sudo fuser -k 5173/tcp
+sudo fuser -k 8080/tcp
 
 echo "Iniciando Pagamento..."
 (cd backend/pagamento-go && go run main.go > ../../logs/pagamento.log 2>&1) &
@@ -24,11 +25,16 @@ echo "Bilhete iniciado (PID: $PID_BILHETE). Verifique bilhete.log."
 echo "Iniciando Reserva..."
 (cd backend/reserva && go run main.go > ../../logs/reserva.log 2>&1) &
 PID_RESERVA=$!
-echo "Bilhete iniciado (PID: $PID_RESERVA). Verifique reserva.log."
+echo "Reserva iniciado (PID: $PID_RESERVA). Verifique reserva.log."
 
 echo "Iniciando Session..."
 (cd backend/session && go run main.go > ../../logs/session.log 2>&1) &
 PID_SESSION=$!
-echo "Bilhete iniciado (PID: $PID_SESSION). Verifique session.log."
+echo "Session iniciado (PID: $PID_SESSION). Verifique session.log."
+
+echo "Iniciando Itinerarios..."
+(cd backend/itinerarios && go run main.go > ../../logs/itinerarios.log 2>&1) &
+PID_ITINERARIOS=$!
+echo "Itinerarios iniciado (PID: $PID_ITINERARIOS). Verifique itinerarios.log."
 
 cd frontend && bun run dev &
