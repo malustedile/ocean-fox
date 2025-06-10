@@ -1,21 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 
+	"github.com/gorilla/mux"
 	amqp "github.com/streadway/amqp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -29,15 +22,34 @@ type ReservaPayload struct {
     DataEmbarque     string `json:"dataEmbarque"`
     NumeroPassageiros int    `json:"numeroPassageiros"`
     NumeroCabines    int    `json:"numeroCabines"`
+    ValorTotal       float64 `json:"valorTotal"`
     LinkPagamento    string `json:"linkPagamento"`
     Status           string `json:"status"`
     CriadoEm         string `json:"criadoEm"`
 }
 
-type MensagemAssinada struct {
-    Reserva    ReservaPayload `json:"reserva"`
-    Assinatura string         `json:"assinatura"`
+type SolicitacaoPagamentoRequest struct {
+    IDReserva  string  `json:"idReserva"`
+    ValorTotal float64 `json:"valorTotal"`
 }
+
+type SolicitacaoPagamentoResponse struct {
+    LinkPagamento string `json:"linkPagamento"`
+    Status        string `json:"statusPagamento"`
+}
+
+type NotificacaoPagamento struct {
+    ID         string  `json:"id"`
+    Status     string  `json:"status"` // "PAGAMENTO_APROVADO" ou "PAGAMENTO_RECUSADO"
+    ValorTotal float64 `json:"valorTotal"`
+    IDReserva  string  `json:"idReserva"`
+    SessionID  string  `json:"sessionId"`
+}
+
+var channelPagamentoAprovado *amqp.Channel
+var channelPagamentoRecusado *amqp.Channel
+
+var reservasCollection *mongo.Collection
 
 func main() {
     // MongoDB
@@ -47,8 +59,7 @@ func main() {
         log.Fatal(err)
     }
     defer client.Disconnect(ctx)
-    db := client.Database("ocean-fox")
-    reservas := db.Collection("reservas")
+    reservasCollection = client.Database("ocean-fox").Collection("reservas")
 
     // RabbitMQ
     rabbit, err := amqp.Dial("amqp://localhost")
@@ -57,124 +68,190 @@ func main() {
     }
     defer rabbit.Close()
 
-    channelReserva, _ := rabbit.Channel()
-    channelPagamentoAprovado, _ := rabbit.Channel()
-    channelPagamentoRecusado, _ := rabbit.Channel()
-
-    reservaExchange := "reserva-criada-exc"
+    channelPagamentoAprovado, err = rabbit.Channel()
+    if err != nil {
+        log.Fatal("Erro ao criar canal pagamento aprovado:", err)
+    }
+    
+    channelPagamentoRecusado, err = rabbit.Channel()
+    if err != nil {
+        log.Fatal("Erro ao criar canal pagamento recusado:", err)
+    }
+    
     pagamentoAprovadoExchange := "pagamento-aprovado-exc"
 
-    channelReserva.ExchangeDeclare(reservaExchange, "fanout", false, false, false, false, nil)
-    channelReserva.QueueDeclare("reserva-criada", true, false, false, false, nil)
-    channelPagamentoAprovado.QueueDeclare("pagamento-aprovado", true, false, false, false, nil)
-    channelPagamentoAprovado.ExchangeDeclare(pagamentoAprovadoExchange, "direct", true, false, false, false, nil)
-    channelPagamentoRecusado.QueueDeclare("pagamento-recusado", true, false, false, false, nil)
-    channelReserva.QueueBind("reserva-criada", "", reservaExchange, false, nil)
-
-    msgs, err := channelReserva.Consume("reserva-criada", "", false, false, false, false, nil)
+    _, err = channelPagamentoAprovado.QueueDeclare("pagamento-aprovado", true, false, false, false, nil)
     if err != nil {
-        log.Fatal(err)
+        log.Fatal("Erro ao declarar queue pagamento aprovado:", err)
     }
-
-    // Carrega chave privada
-    privKeyData, err := ioutil.ReadFile("./private.key")
+    
+    err = channelPagamentoAprovado.ExchangeDeclare(pagamentoAprovadoExchange, "direct", true, false, false, false, nil)
     if err != nil {
-        log.Fatal("Erro ao ler chave privada:", err)
+        log.Fatal("Erro ao declarar exchange pagamento aprovado:", err)
     }
-    block, _ := pem.Decode(privKeyData)
-    if block == nil {
-        log.Fatal("Falha ao decodificar PEM da chave privada")
-    }
-    privKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+    
+    _, err = channelPagamentoRecusado.QueueDeclare("pagamento-recusado", true, false, false, false, nil)
     if err != nil {
-        log.Fatal("Erro ao parsear chave privada:", err)
+        log.Fatal("Erro ao declarar queue pagamento recusado:", err)
     }
+    
+    r := mux.NewRouter()
+    r.HandleFunc("/gerar-link", SolicitarLinkPagamentoHandler).Methods("POST")
+    r.HandleFunc("/webhook/pagamento", WebhookPagamentoHandler).Methods("POST")
 
-    go func() {
-        for d := range msgs {
-            var reserva ReservaPayload
-            if err := json.Unmarshal(d.Body, &reserva); err != nil {
-                log.Println("Erro ao decodificar reserva:", err)
-                d.Ack(false)
-                continue
-            }
-            fmt.Println("Reserva recebida:", reserva)
-
-            pagamentoAprovado := randBool()
-            if pagamentoAprovado {
-                reserva.Status = "PAGAMENTO_APROVADO"
-            } else {
-                reserva.Status = "PAGAMENTO_REPROVADO"
-            }
-
-            // Assinatura digital
-            reservaBytes, _ := json.Marshal(reserva)
-            hash := sha256.Sum256(reservaBytes)
-            signature, err := rsa.SignPKCS1v15(rand.Reader, privKey.(*rsa.PrivateKey), crypto.SHA256, hash[:])
-            if err != nil {
-                log.Println("Erro ao assinar:", err)
-                d.Ack(false)
-                continue
-            }
-            assinatura := base64.StdEncoding.EncodeToString(signature)
-
-            payload, _ := json.Marshal(MensagemAssinada{
-                Reserva:    reserva,
-                Assinatura: assinatura,
-            })
-
-            if pagamentoAprovado {
-                channelPagamentoAprovado.Publish(
-                    pagamentoAprovadoExchange,
-                    "pagamento-aprovado",
-                    false, false,
-                    amqp.Publishing{
-                        ContentType: "application/json",
-                        Body:        payload,
-                    },
-                )
-                fmt.Println("Pagamento aprovado:", reserva)
-            } else {
-                channelPagamentoRecusado.Publish(
-                    "",
-                    "pagamento-recusado",
-                    false, false,
-                    amqp.Publishing{
-                        ContentType: "application/json",
-                        Body:        payload,
-                    },
-                )
-                fmt.Println("Pagamento recusado:", reserva)
-            }
-
-            // Atualiza no MongoDB
-            objID, err := primitive.ObjectIDFromHex(reserva.ID)
-            if err == nil {
-                update := bson.M{
-                    "$set": bson.M{
-                        "status":    reserva.Status,
-                        "assinatura": assinatura,
-                    },
-                }
-                result, err := reservas.UpdateOne(ctx, bson.M{"_id": objID}, update)
-                if err != nil {
-                    log.Println("Erro ao atualizar reserva:", err)
-                } else {
-                    fmt.Println("MongoDB update:", result)
-                }
-            }
-
-            d.Ack(false)
-        }
-    }()
-
-    http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-    })
     port := "3001"
     fmt.Printf("App is running at 0.0.0.0:%s\n", port)
-    log.Fatal(http.ListenAndServe(":"+port, nil))
+    log.Fatal(http.ListenAndServe(":"+port, r))
 }
 
-func randBool() bool {
-    return time.Now().UnixNano()%2 == 0
+func SolicitarLinkPagamentoHandler(w http.ResponseWriter, r *http.Request) {
+    log.Printf("gerando link de pagamento")
+    var solicitacao SolicitacaoPagamentoRequest
+    if err := json.NewDecoder(r.Body).Decode(&solicitacao); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+    sessionID, err := r.Cookie("sessionId")
+    if err != nil || sessionID.Value == "" {
+        http.Error(w, "Session-ID header is required", http.StatusBadRequest)
+        return
+    }
+
+    // Chama sistema externo de pagamento
+    linkPagamento, err := solicitarLinkSistemaExterno(solicitacao, sessionID.Value)
+    if err != nil {
+        log.Printf("Erro ao solicitar link de pagamento: %v", err)
+        http.Error(w, "Erro interno", http.StatusInternalServerError)
+        return
+    }
+
+    response := SolicitacaoPagamentoResponse{
+        LinkPagamento: linkPagamento,
+        Status:        "AGUARDANDO_PAGAMENTO",
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
+}
+
+func WebhookPagamentoHandler(w http.ResponseWriter, r *http.Request) {
+    var notificacao NotificacaoPagamento
+    if err := json.NewDecoder(r.Body).Decode(&notificacao); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+    log.Printf("Webhook recebido - Reserva: %s, Status: %s", notificacao.IDReserva, notificacao.Status)
+
+    // Atualiza status no MongoDB
+    ctx := context.Background()
+    objID, err := primitive.ObjectIDFromHex(notificacao.IDReserva)
+    if err != nil {
+        log.Printf("Erro ao converter ID da reserva: %v", err)
+        http.Error(w, "ID inválido", http.StatusBadRequest)
+        return
+    }
+    update := bson.M{
+        "$set": bson.M{
+            "statusPagamento": notificacao.Status,
+        },
+    }
+
+    _, err = reservasCollection.UpdateOne(ctx, bson.M{"_id": objID}, update)
+    if err != nil {
+        log.Printf("Erro ao atualizar reserva no MongoDB: %v", err)
+        http.Error(w, "Erro interno", http.StatusInternalServerError)
+        return
+    }
+
+    // Publica mensagem na fila apropriada
+    reserva := ReservaPayload{
+        ID:         notificacao.IDReserva,
+        ValorTotal: notificacao.ValorTotal,
+        Status:     notificacao.Status,
+    }
+    reservaJSON, err := json.Marshal(reserva)
+    if err != nil {
+        log.Printf("Erro ao serializar reserva: %v", err)
+        http.Error(w, "Erro interno", http.StatusInternalServerError)
+        return
+    }
+
+    if notificacao.Status == "PAGAMENTO_APROVADO" {
+        err := channelPagamentoAprovado.Publish(
+            "pagamento-aprovado-exc",
+            "pagamento-aprovado",
+            false, false,
+            amqp.Publishing{
+                ContentType: "application/json",
+                Body:        reservaJSON,
+            },
+        )
+        if err != nil {
+            log.Printf("Erro ao publicar pagamento aprovado: %v", err)
+            http.Error(w, "Erro interno", http.StatusInternalServerError)
+            return
+        }
+    } else if notificacao.Status == "PAGAMENTO_RECUSADO" {
+        err := channelPagamentoRecusado.Publish(
+            "",
+            "pagamento-recusado",
+            false, false,
+            amqp.Publishing{
+                ContentType: "application/json",
+                Body:        reservaJSON,
+            },
+        )    
+        if err != nil {
+            log.Printf("Erro ao publicar pagamento recusado: %v", err)
+        }
+    }
+
+    w.WriteHeader(http.StatusOK)
+    fmt.Fprintf(w, "Notificação processada com sucesso")
+}
+
+func solicitarLinkSistemaExterno(solicitacao SolicitacaoPagamentoRequest, sessionID string) (string, error) {
+    sistemaExternoURL := "http://localhost:8000/link-pagamento"
+    
+    requestData := map[string]interface{}{
+        "idReserva":  solicitacao.IDReserva,
+        "valorTotal": solicitacao.ValorTotal,
+    }
+    
+    jsonData, err := json.Marshal(requestData)
+    if err != nil {
+        fmt.Println("Erro ao serializar dados da solicitação:", err)
+        return "", err
+    }
+
+    req, err := http.NewRequest("POST", sistemaExternoURL, bytes.NewBuffer(jsonData))
+    if err != nil {
+        fmt.Println("Erro ao criar requisição:", err)
+        return "", err
+    }
+    
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Session-ID", sessionID)
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Erro ao enviar requisição:", err)
+        return "", err
+    }
+    defer resp.Body.Close()
+
+    var response map[string]interface{}
+    if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+        return "", err
+    }
+
+    link, ok := response["link"].(string)
+    if !ok {
+        return "", fmt.Errorf("resposta inválida do sistema externo")
+    }
+
+    return link, nil
 }
