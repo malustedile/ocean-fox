@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
 type NotificacaoPagamento struct {
     ID         string  `json:"id"`
-    Status     string  `json:"statusPagamento"` // "PAGAMENTO_APROVADO" ou "PAGAMENTO_RECUSADO"
+    Status     string  `json:"status"` // "PAGAMENTO_APROVADO" ou "PAGAMENTO_RECUSADO"
     ValorTotal float64 `json:"valorTotal"`
     IDReserva  string  `json:"idReserva"`
     SessionID  string  `json:"sessionId"`
@@ -33,7 +34,7 @@ type PagamentoRequest struct {
 }
 
 type ProcessarPagamentoRequest struct {
-    SessionID  string  `json:"sessionId"`
+
     IDReserva  string  `json:"idReserva"`
     ValorTotal float64 `json:"valorTotal"`
 }
@@ -72,12 +73,17 @@ func LinkPagamentoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ProcessarPagamentoHandler(w http.ResponseWriter, r *http.Request) {
+    sessionId, err := r.Cookie("sessionId")
+    if err != nil {
+        http.Error(w, "Session-ID header is required", http.StatusBadRequest)
+        return
+    }
+    var sessionID = sessionId.Value
     var req ProcessarPagamentoRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
     }
-    sessionID := req.SessionID
     idReserva := req.IDReserva
     valorTotal := strconv.FormatFloat(req.ValorTotal, 'f', 2, 64)
     
@@ -153,9 +159,19 @@ func main() {
     r.HandleFunc("/link-pagamento", LinkPagamentoHandler).Methods(http.MethodPost)
     r.HandleFunc("/pagar", ProcessarPagamentoHandler).Methods(http.MethodPost)
 
-    port := "8000"
-    fmt.Printf("Sistema Externo de Pagamento rodando em 0.0.0.0:%s\n", port)
-    log.Fatal(http.ListenAndServe(":"+port, r))
+
+	// CORS middleware
+	// AllowedOrigins can be more specific in production
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"http://localhost:5173"}), // Or specify your frontend domain(s)
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-Requested-With"}),
+		handlers.AllowCredentials(), // Important if you use cookies/auth headers from frontend
+	)
+
+    if err := http.ListenAndServe(":8000", corsHandler(r)); err != nil {
+		log.Fatalf("Could not start server: %s\n", err.Error())
+	}
 }
 
 func randBool() bool {

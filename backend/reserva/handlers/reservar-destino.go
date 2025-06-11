@@ -109,7 +109,7 @@ func NovaReservaDocument(dto ReservaDTO, sessionID, linkPagamento string) Reserv
         NumeroCabines:     dto.NumeroCabines,
         ValorTotal:        dto.ValorTotal,
         LinkPagamento:     linkPagamento,
-        Status:            "AGUARDANDO_PAGAMENTO",
+        StatusPagamento:   "AGUARDANDO_PAGAMENTO",
         CriadoEm:          time.Now().UTC(),
     }
 }
@@ -138,7 +138,7 @@ func NovaReservaPublicada(doc ReservaDocument) ReservaPublicada {
         NumeroCabines:     doc.NumeroCabines,
         ValorTotal:        doc.ValorTotal,
         LinkPagamento:     doc.LinkPagamento,
-        Status:            doc.Status,
+        Status:            doc.StatusPagamento,
         Bilhete:           nil,
         CriadoEm:          doc.CriadoEm.Format(time.RFC3339Nano),
     }

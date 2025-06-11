@@ -22,3 +22,8 @@ export const reservarViagem = async (reserva: ReservaDto) => {
   const response = await client.post(`destinos/reservar`, reserva);
   return response.data;
 };
+
+export const cancelarViagem = async (id: string) => {
+  const response = await client.post(`destinos/cancelar`, { id });
+  return response.data;
+};

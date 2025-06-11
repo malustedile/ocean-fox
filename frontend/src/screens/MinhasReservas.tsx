@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { minhasReservas } from "../api/reserva";
+import { cancelarViagem, minhasReservas } from "../api/reserva";
 import { MdOutlineFileDownload } from "react-icons/md";
+import { FaRegCheckCircle } from "react-icons/fa";
+import { FaRegCircleXmark } from "react-icons/fa6";
+import { pagarReserva } from "../api/pagamento";
 
 export const MinhasReservas = () => {
   const [reservas, setReservas] = useState<any[]>([]);
@@ -17,12 +20,22 @@ export const MinhasReservas = () => {
       <div className="flex flex-col gap-8 text-slate-700 py-4 w-[1000px]">
         {reservas.map((r) => (
           <ItemReserva
-            id={r._id}
+            id={r.id}
             data={r.criadoEm}
             destino={r.destino}
+            statusPagamento={r.statusPagamento}
             status={r.status}
             passageiros={r.numeroPassageiros}
             valor={r.valorTotal || "0"}
+            handleCancelar={async () => {
+              await cancelarViagem(r.id);
+              await fetchReservas();
+            }}
+            handlePagar={async () => {
+              await pagarReserva({ idReserva: r.id, valorTotal: r.valorTotal });
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              await fetchReservas();
+            }}
           />
         ))}
       </div>
@@ -34,18 +47,24 @@ interface ItemReservaProps {
   id: string;
   destino: string;
   data: string;
+  statusPagamento: string;
   status: string;
   passageiros: number;
   valor: string;
+  handleCancelar: () => void;
+  handlePagar: () => void;
 }
 
 const ItemReserva: React.FC<ItemReservaProps> = ({
   id,
   data,
   destino,
-  status,
+  statusPagamento,
   passageiros,
   valor,
+  status,
+  handleCancelar,
+  handlePagar,
 }) => {
   return (
     <div className="flex justify-between bg-white p-4 px-12 pr-8 rounded-xl relative">
@@ -65,18 +84,36 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
         </div>
         <div className="flex flex-col w-full">
           <div className="font-bold">Status:</div>
-          {status === "PAGAMENTO_APROVADO" && (
+          {status === "cancelado" && (
             <div className="flex  ">
-              <div className="flex bg-[#d3f9d8] text-sm px-2 rounded-lg text-[#2b8a3e] font-bold ">
-                Pagamento Aprovado
+              <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold">
+                Cancelado
               </div>
             </div>
           )}
-          {status === "PAGAMENTO_REPROVADO" && (
-            <div className="flex  ">
-              <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold">
-                Pagamento Reprovado
-              </div>
+          {status !== "cancelado" && (
+            <div>
+              {statusPagamento === "PAGAMENTO_APROVADO" && (
+                <div className="flex  ">
+                  <div className="flex bg-[#d3f9d8] text-sm px-2 rounded-lg text-[#2b8a3e] font-bold ">
+                    Pagamento Aprovado
+                  </div>
+                </div>
+              )}
+              {statusPagamento === "PAGAMENTO_REPROVADO" && (
+                <div className="flex  ">
+                  <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold">
+                    Pagamento Reprovado
+                  </div>
+                </div>
+              )}
+              {statusPagamento === "AGUARDANDO_PAGAMENTO" && (
+                <div className="flex  ">
+                  <div className="bg-[#fff3bf] text-sm px-2 rounded-lg text-[#e67700] font-bold truncate">
+                    Aguardando Pagamento
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -95,11 +132,33 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
           </div>
         </div>
         <div className="flex items-center justify-center">
-          {status === "PAGAMENTO_APROVADO" && (
-            <div className="flex items-center justify-center">
-              <div className="cursor-pointer">
-                <MdOutlineFileDownload className="text-xl" />
+          {/* {status !== "cancelado" &&
+            statusPagamento === "PAGAMENTO_APROVADO" && (
+              <div className="flex items-center justify-center">
+                <div className="cursor-pointer">
+                  <MdOutlineFileDownload className="text-xl" />
+                </div>
               </div>
+            )} */}
+          {status !== "cancelado" &&
+            statusPagamento === "AGUARDANDO_PAGAMENTO" && (
+              <div className="flex items-center justify-center mr-2">
+                <button
+                  className="cursor-pointer"
+                  onClick={() => handlePagar()}
+                >
+                  <FaRegCheckCircle className="text-xl text-green-500" />
+                </button>
+              </div>
+            )}
+          {status !== "cancelado" && (
+            <div className="flex items-center justify-center">
+              <button
+                className="cursor-pointer"
+                onClick={() => handleCancelar()}
+              >
+                <FaRegCircleXmark className="text-xl text-red-500" />
+              </button>
             </div>
           )}
         </div>

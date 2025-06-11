@@ -85,7 +85,7 @@ export const BookingModal = ({
               value={numeroCabines}
               onChange={(e) => setNumeroCabines(Number(e.target.value))}
               min={1}
-              max={4}
+              max={trip.cabines}
               className="input-sm rounded border border-gray-300 p-2 focus:outline-none"
             />
           </div>

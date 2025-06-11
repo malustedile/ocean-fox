@@ -6,6 +6,7 @@ import { BookingModal } from "./BookingModal";
 export interface Trip {
   nome: string;
   categoria: keyof typeof iconsCategorias;
+  cabines: number;
   descricao: {
     embarque: string;
     desembarque: string;

@@ -38,21 +38,29 @@ export const CruiseDetails = ({
             {trip.descricao.lugaresVisitados.join(", ").toLocaleString()}
           </div>
         </div>
-        <div className="flex flex-col w-full items-end">
-          <div className="text-slate-600 text-xl font-medium ml-auto">
-            {passageiros ? (
-              <span className="text-slate-600 text-xl font-medium">
-                R$ {Number(trip.descricao.valorPorPessoa) * passageiros}
-              </span>
-            ) : (
-              <span className="text-slate-600 text-xl font-medium">
-                R$ {trip.descricao.valorPorPessoa}
-              </span>
+        <div className="flex w-full justify-between">
+          <div className="flex flex-col gap-2 text-slate-500 text-xs">
+            <div>Cabines:</div>
+            <div className="text-[14px]">
+              <b>{trip.cabines}</b> disponíveis
+            </div>
+          </div>
+          <div className="flex flex-col ">
+            <div className="text-slate-600 text-xl font-medium ml-auto">
+              {passageiros ? (
+                <span className="text-slate-600 text-xl font-medium">
+                  R$ {Number(trip.descricao.valorPorPessoa) * passageiros}
+                </span>
+              ) : (
+                <span className="text-slate-600 text-xl font-medium">
+                  R$ {trip.descricao.valorPorPessoa}
+                </span>
+              )}
+            </div>
+            {!passageiros && (
+              <div className="text-slate-500 text-xs">por pessoa</div>
             )}
           </div>
-          {!passageiros && (
-            <div className="text-slate-500 text-xs">por pessoa</div>
-          )}
         </div>
       </div>
     </div>

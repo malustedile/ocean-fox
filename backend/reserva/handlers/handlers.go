@@ -66,7 +66,8 @@ type ReservaDocument struct { // For MongoDB
 	NumeroCabines     int                `json:"numeroCabines" bson:"numeroCabines"`
 	ValorTotal        float64            `json:"valorTotal" bson:"valorTotal"`
 	LinkPagamento     string             `json:"linkPagamento" bson:"linkPagamento"`
-	Status            string             `json:"statusPagamento" bson:"statusPagamento"`
+	StatusPagamento   string     		 `json:"statusPagamento" bson:"statusPagamento"`
+	Status			  string             `json:"status" bson:"status"` // Status of the reserva
 	PagamentoValido   *bool              `json:"pagamentoValido,omitempty" bson:"pagamentoValido,omitempty"` // Pointer to distinguish between false and not set
 	CriadoEm          time.Time          `json:"criadoEm" bson:"criadoEm"`
 }

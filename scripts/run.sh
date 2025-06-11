@@ -5,10 +5,11 @@ sudo fuser -k 3003/tcp
 sudo fuser -k 3004/tcp
 sudo fuser -k 3005/tcp
 sudo fuser -k 5173/tcp
+sudo fuser -k 8000/tcp
 sudo fuser -k 8080/tcp
 
 echo "Iniciando Pagamento..."
-(cd backend/pagamento-go && go run main.go > ../../logs/pagamento.log 2>&1) &
+(cd backend/pagamento && go run main.go > ../../logs/pagamento.log 2>&1) &
 PID_PAGAMENTO=$!
 echo "Pagamento iniciado (PID: $PID_PAGAMENTO). Verifique pagamento.log."
 
@@ -36,5 +37,10 @@ echo "Iniciando Itinerarios..."
 (cd backend/itinerarios && go run main.go > ../../logs/itinerarios.log 2>&1) &
 PID_ITINERARIOS=$!
 echo "Itinerarios iniciado (PID: $PID_ITINERARIOS). Verifique itinerarios.log."
+
+echo "Iniciando Sistema Externo Pagamentos..."
+(cd backend/sistema-externo-pagamento && go run main.go > ../../logs/sistema-externo-pagamento.log 2>&1) &
+PID_SISTEMA_EXTERNO_PAGAMENTO=$!
+echo "Itinerarios Sistema Externo Pagamento (PID: $PID_SISTEMA_EXTERNO_PAGAMENTO). Verifique sistema-externo-pagamento.log."
 
 cd frontend && bun run dev &
