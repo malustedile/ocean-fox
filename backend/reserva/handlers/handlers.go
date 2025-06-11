@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"reserva-go/services"
 	"time"
@@ -113,6 +115,69 @@ func MinhasReservasHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	RespondWithJSON(w, http.StatusOK, results)
 }
+
+func DestinosPorCategoriaHandler(w http.ResponseWriter, r *http.Request) {
+    resp, err := http.Get("http://localhost:8080/destinos-por-categoria")
+    if err != nil {
+        http.Error(w, "Erro ao fazer a requisição: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+    defer resp.Body.Close()
+
+    // Define o Content-Type como application/json
+    w.Header().Set("Content-Type", "application/json")
+
+    // Define o status code da resposta
+    w.WriteHeader(resp.StatusCode)
+
+    // Copia o corpo da resposta para o ResponseWriter
+    _, err = io.Copy(w, resp.Body)
+    if err != nil {
+        http.Error(w, "Erro ao ler a resposta: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+}
+
+func BuscarDestinosHandler(w http.ResponseWriter, r *http.Request) {
+    // Lê o corpo da requisição original
+    bodyBytes, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "Erro ao ler corpo da requisição: "+err.Error(), http.StatusBadRequest)
+        return
+    }
+    defer r.Body.Close()
+
+    // Cria a requisição POST para o endpoint com o mesmo corpo
+    req, err := http.NewRequest("POST", "http://localhost:8080/destinos/buscar", bytes.NewBuffer(bodyBytes))
+    if err != nil {
+        http.Error(w, "Erro ao criar requisição: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    // Define o Content-Type para JSON
+    req.Header.Set("Content-Type", "application/json")
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        http.Error(w, "Erro ao fazer requisição: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+    defer resp.Body.Close()
+
+    // Define o Content-Type da resposta para JSON
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(resp.StatusCode)
+
+    // Copia a resposta para o ResponseWriter
+    _, err = io.Copy(w, resp.Body)
+    if err != nil {
+        http.Error(w, "Erro ao ler resposta: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+}
+
+
 
 func CriarDestinoHandler(w http.ResponseWriter, r *http.Request) {
 	var dto Destino

@@ -36,6 +36,8 @@ func main() {
 	r.HandleFunc("/destinos/cancelar", h.CancelarViagemHandler).Methods(http.MethodPost)
     r.HandleFunc("/sse", h.SSEHandler).Methods(http.MethodGet)
     r.HandleFunc("/sse/send", h.SSESendHandler).Methods(http.MethodPost)
+	r.HandleFunc("/destinos-por-categoria", h.DestinosPorCategoriaHandler).Methods("GET")
+	r.HandleFunc("/destinos/buscar", h.BuscarDestinosHandler).Methods("POST")
 
 	// CORS middleware
 	// AllowedOrigins can be more specific in production

@@ -1,6 +1,0 @@
-o que precisa mudar: 
-
-- criar MS Intinerarios, que retorna os itinerarios do banco 
-    considera o consumo das filas reserva-criada e reserva-cancelada para verificar a disponibilidade de cabines
-    API que retorna disponibilidade de cabine e itinerarios
-- o MS Reserva tem que consultar esse tal de MS itinerarios
