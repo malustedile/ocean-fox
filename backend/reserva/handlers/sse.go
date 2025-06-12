@@ -77,42 +77,66 @@ func SSEHandler(w http.ResponseWriter, r *http.Request) {
         }
     }
 }
-
+// SSEMessage representa uma mensagem enviada para o cliente SSE
 type SSEMessage struct {
-    SessionID string `json:"sessionId"`
-    Msg       string `json:"msg"`
-    EventType string `json:"eventType"`
+    SessionID string          `json:"sessionId"`
+    Msg       string          `json:"msg,omitempty"`
+    EventType string          `json:"eventType"`
+    Data      json.RawMessage `json:"data,omitempty"` // Campo opcional
 }
 
-// SSESendHandler sends a message to all connected SSE clients
+// SSESendHandler envia uma mensagem para os clientes SSE conectados
 func SSESendHandler(w http.ResponseWriter, r *http.Request) {
     var sseMsg SSEMessage
     if err := json.NewDecoder(r.Body).Decode(&sseMsg); err != nil {
+        fmt.Println(err)
         http.Error(w, "Invalid JSON body", http.StatusBadRequest)
         return
     }
-    if sseMsg.Msg == "" || sseMsg.EventType == "" || sseMsg.SessionID == "" {
+    if  sseMsg.EventType == "" || sseMsg.SessionID == "" {
         http.Error(w, "Missing required fields", http.StatusBadRequest)
         return
     }
-	SendMessageToClient(sseMsg)
+
+    SendMessageToClient(sseMsg)
 
     w.WriteHeader(http.StatusOK)
     w.Write([]byte("Message sent"))
 }
 
+// SendMessageToClient envia a mensagem formatada para o cliente SSE
 func SendMessageToClient(sseMsg SSEMessage) {
-	sseClientsMu.Lock()
-	payload := fmt.Sprintf(`{"sessionId":"%s","msg":"%s","eventType":"%s"}`, sseMsg.SessionID, sseMsg.Msg, sseMsg.EventType)
-	fmt.Print("Sending message to client: ", sseMsg.SessionID, "\n")
+    sseClientsMu.Lock()
+    defer sseClientsMu.Unlock()
 
-	if ch, ok := sseClients[sseMsg.SessionID]; ok {
-		select {
-		case ch <- payload:
-			fmt.Print("Message sent to client: ", sseMsg.SessionID, "\n")
-		default:
-			// If channel is full, we skip sending to avoid blocking
-		}
-	}
-	sseClientsMu.Unlock()
+    fmt.Println("Sending message to client:", sseMsg.SessionID)
+
+    // Monta o payload com ou sem `data`
+    var payloadMap = map[string]interface{}{
+        "sessionId": sseMsg.SessionID,
+        "msg":       sseMsg.Msg,
+        "eventType": sseMsg.EventType,
+    }
+    fmt.Println(payloadMap)
+    if len(sseMsg.Data) > 0 {
+        var jsonData interface{}
+        if err := json.Unmarshal(sseMsg.Data, &jsonData); err == nil {
+            payloadMap["data"] = jsonData
+        }
+    }
+
+    payloadBytes, err := json.Marshal(payloadMap)
+    if err != nil {
+        fmt.Println("Error marshalling payload:", err)
+        return
+    }
+
+    if ch, ok := sseClients[sseMsg.SessionID]; ok {
+        select {
+        case ch <- string(payloadBytes):
+            fmt.Println("Message sent to client:", sseMsg.SessionID)
+        default:
+            fmt.Println("Client channel full, skipping:", sseMsg.SessionID)
+        }
+    }
 }

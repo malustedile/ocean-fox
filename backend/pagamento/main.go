@@ -141,7 +141,7 @@ func WebhookPagamentoHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Invalid JSON", http.StatusBadRequest)
         return
     }
-
+    
     log.Printf("Webhook recebido - Reserva: %s, Status: %s", notificacao.IDReserva, notificacao.Status)
 
     // Atualiza status no MongoDB
@@ -188,6 +188,7 @@ func WebhookPagamentoHandler(w http.ResponseWriter, r *http.Request) {
                 Body:        reservaJSON,
             },
         )
+
         if err != nil {
             log.Printf("Erro ao publicar pagamento aprovado: %v", err)
             http.Error(w, "Erro interno", http.StatusInternalServerError)
@@ -207,7 +208,10 @@ func WebhookPagamentoHandler(w http.ResponseWriter, r *http.Request) {
             log.Printf("Erro ao publicar pagamento recusado: %v", err)
         }
     }
-
+    enviarSse(map[string]interface{}{
+        "id": notificacao.IDReserva,
+        "status": notificacao.Status,
+    }, notificacao.SessionID)
     w.WriteHeader(http.StatusOK)
     fmt.Fprintf(w, "Notificação processada com sucesso")
 }
@@ -218,6 +222,60 @@ func solicitarLinkSistemaExterno(solicitacao SolicitacaoPagamentoRequest, sessio
     requestData := map[string]interface{}{
         "idReserva":  solicitacao.IDReserva,
         "valorTotal": solicitacao.ValorTotal,
+    }
+    
+    jsonData, err := json.Marshal(requestData)
+    if err != nil {
+        fmt.Println("Erro ao serializar dados da solicitação:", err)
+        return "", err
+    }
+
+    req, err := http.NewRequest("POST", sistemaExternoURL, bytes.NewBuffer(jsonData))
+    if err != nil {
+        fmt.Println("Erro ao criar requisição:", err)
+        return "", err
+    }
+    
+    req.Header.Set("Content-Type", "application/json")
+    req.AddCookie(&http.Cookie{Name: "sessionId", Value: sessionID})
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Erro ao enviar requisição:", err)
+        return "", err
+    }
+    defer resp.Body.Close()
+
+    var response map[string]interface{}
+    if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+        return "", err
+    }
+
+    link, ok := response["link"].(string)
+    if !ok {
+        return "", fmt.Errorf("resposta inválida do sistema externo")
+    }
+
+    return link, nil
+}
+
+type SSEMessage struct {
+    SessionID string          `json:"sessionId"`
+    EventType string          `json:"eventType"`
+    Data      json.RawMessage `json:"data,omitempty"` // Campo opcional
+}
+
+
+func enviarSse(data map[string]interface{}, sessionID string) (string, error) {
+    fmt.Println("Sending SSE to update status")
+
+    sistemaExternoURL := "http://localhost:3000/sse/send"
+    
+    requestData := map[string]interface{}{
+        "sessionId": sessionID,
+        "data": data,
+        "eventType": "UPDATE_PAYMENT_STATUS",
     }
     
     jsonData, err := json.Marshal(requestData)

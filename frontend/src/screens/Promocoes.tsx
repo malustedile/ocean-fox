@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { cancelarInscricao, inscrever, puxarPromocoes } from "../api/marketing";
 
 export interface Subscriptions {
@@ -6,36 +6,11 @@ export interface Subscriptions {
   promotions: { mensagem: string }[];
 }
 
-export const Promocoes = () => {
-  const [promocoes, setPromocoes] = useState<Subscriptions>({
-    hasSubscription: false,
-    promotions: [],
-  });
-  const fetchPromotions = async () => {
-    const res = await puxarPromocoes();
-    setPromocoes(res);
-  };
+interface PromocoesDto {
+  promocoes: any;
+}
 
-  useEffect(() => {
-    fetchPromotions();
-    const eventSource = new EventSource("http://localhost:3000/sse", {
-      withCredentials: true,
-    });
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      console.log(data.msg);
-      console.log(promocoes);
-      setPromocoes((prev) => ({
-        ...prev,
-        promotions: [{ mensagem: data.msg }, ...prev.promotions],
-      }));
-    };
-    return () => {
-      eventSource.close();
-    };
-  }, []);
-
+export const Promocoes: React.FC<PromocoesDto> = ({ promocoes }) => {
   return (
     <div className="">
       <PromotionsScreen promotions={promocoes} />

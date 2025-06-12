@@ -1,24 +1,18 @@
-import { useEffect, useState } from "react";
-import { cancelarViagem, minhasReservas } from "../api/reserva";
-import { MdOutlineFileDownload } from "react-icons/md";
+import { cancelarViagem } from "../api/reserva";
 import { FaRegCheckCircle } from "react-icons/fa";
 import { FaRegCircleXmark } from "react-icons/fa6";
 import { pagarReserva } from "../api/pagamento";
+import React from "react";
 
-export const MinhasReservas = () => {
-  const [reservas, setReservas] = useState<any[]>([]);
-  const fetchReservas = async () => {
-    const res = await minhasReservas();
-    setReservas(res);
-  };
+interface MinhasReservasDto {
+  reservas: any;
+}
 
-  useEffect(() => {
-    fetchReservas();
-  }, []);
+export const MinhasReservas: React.FC<MinhasReservasDto> = ({ reservas }) => {
   return (
     <div className="flex justify-center ">
       <div className="flex flex-col gap-8 text-slate-700 py-4 w-[1000px]">
-        {reservas.map((r) => (
+        {reservas.map((r: any) => (
           <ItemReserva
             id={r.id}
             data={r.criadoEm}
@@ -29,12 +23,10 @@ export const MinhasReservas = () => {
             valor={r.valorTotal || "0"}
             handleCancelar={async () => {
               await cancelarViagem(r.id);
-              await fetchReservas();
             }}
             handlePagar={async () => {
               await pagarReserva({ idReserva: r.id, valorTotal: r.valorTotal });
               await new Promise((resolve) => setTimeout(resolve, 1000));
-              await fetchReservas();
             }}
           />
         ))}
@@ -100,7 +92,7 @@ const ItemReserva: React.FC<ItemReservaProps> = ({
                   </div>
                 </div>
               )}
-              {statusPagamento === "PAGAMENTO_REPROVADO" && (
+              {statusPagamento === "PAGAMENTO_RECUSADO" && (
                 <div className="flex  ">
                   <div className="bg-[#ffe3e3] text-sm px-2 rounded-lg text-[#f03e3e] font-bold">
                     Pagamento Reprovado

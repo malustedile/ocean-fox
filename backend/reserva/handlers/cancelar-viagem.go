@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"reserva-go/services"
@@ -89,8 +91,59 @@ func CancelarViagemHandler(w http.ResponseWriter, r *http.Request) {
         })
         return
     }
-
+    enviarSse(map[string]interface{}{
+        "id": dto.ID,
+        "canceled": true,
+    }, sessionID)
     RespondWithJSON(w, http.StatusOK, map[string]interface{}{
         "mensagem": "Reserva cancelada.",
     })
+}
+
+
+func enviarSse(data map[string]interface{}, sessionID string) (string, error) {
+    fmt.Println("Sending SSE to update status")
+
+    sistemaExternoURL := "http://localhost:3000/sse/send"
+    
+    requestData := map[string]interface{}{
+        "sessionId": sessionID,
+        "data": data,
+        "eventType": "UPDATE_PAYMENT_STATUS",
+    }
+    
+    jsonData, err := json.Marshal(requestData)
+    if err != nil {
+        fmt.Println("Erro ao serializar dados da solicitação:", err)
+        return "", err
+    }
+
+    req, err := http.NewRequest("POST", sistemaExternoURL, bytes.NewBuffer(jsonData))
+    if err != nil {
+        fmt.Println("Erro ao criar requisição:", err)
+        return "", err
+    }
+    
+    req.Header.Set("Content-Type", "application/json")
+    req.AddCookie(&http.Cookie{Name: "sessionId", Value: sessionID})
+
+    client := &http.Client{}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Erro ao enviar requisição:", err)
+        return "", err
+    }
+    defer resp.Body.Close()
+
+    var response map[string]interface{}
+    if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+        return "", err
+    }
+
+    link, ok := response["link"].(string)
+    if !ok {
+        return "", fmt.Errorf("resposta inválida do sistema externo")
+    }
+
+    return link, nil
 }

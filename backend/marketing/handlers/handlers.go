@@ -135,6 +135,7 @@ func CancelSubscription(c *fiber.Ctx) error {
         return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"success": false, "error": err.Error()})
     }
 
+
     res, err := services.CollectionInscricoes.DeleteMany(ctx, bson.M{"sessionId": sessionId})
     if err != nil {
         return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"success": false, "error": err.Error()})
@@ -150,3 +151,4 @@ func CancelSubscription(c *fiber.Ctx) error {
 
     return c.JSON(fiber.Map{"success": true})
 }
+

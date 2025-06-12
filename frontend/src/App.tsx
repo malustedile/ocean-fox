@@ -4,8 +4,10 @@ import { NavBar } from "./components/NavBar";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { MinhasReservas } from "./screens/MinhasReservas";
-import { Promocoes } from "./screens/Promocoes";
+import { Promocoes, Subscriptions } from "./screens/Promocoes";
 import { Itinerarios } from "./screens/Itinerarios";
+import { puxarPromocoes } from "./api/marketing";
+import { minhasReservas } from "./api/reserva";
 export enum Screens {
   Itinerarios = "ITINERARIOS",
   MinhasReservas = "MINHAS_RESERVAS",
@@ -14,11 +16,63 @@ export enum Screens {
 
 function App() {
   const [filter, setFilter] = useState();
+  const [reservas, setReservas] = useState<any[]>([]);
+
+  const [promocoes, setPromocoes] = useState<Subscriptions>({
+    hasSubscription: false,
+    promotions: [],
+  });
+  const fetchPromotions = async () => {
+    const res = await puxarPromocoes();
+    setPromocoes(res);
+  };
   const [activeScreen, setActiveScreen] = useState<Screens>(
     Screens.Itinerarios
   );
+
+  const fetchReservas = async () => {
+    const res = await minhasReservas();
+    setReservas(res);
+  };
+
+  useEffect(() => {
+    fetchReservas();
+  }, []);
   useEffect(() => {
     axios.get("http://localhost:3005/session", { withCredentials: true });
+  }, []);
+
+  useEffect(() => {
+    fetchPromotions();
+    const eventSource = new EventSource("http://localhost:3000/sse", {
+      withCredentials: true,
+    });
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log({ data });
+      if (data.eventType === "promocao") {
+        setPromocoes((prev) => ({
+          ...prev,
+          promotions: [{ mensagem: data.msg }, ...prev.promotions],
+        }));
+      } else if (data.eventType === "UPDATE_PAYMENT_STATUS") {
+        setReservas((prev) =>
+          prev.map((res) => {
+            if (res.id !== data.data.id) return res;
+            if (data.data.canceled) {
+              res.status = "cancelado";
+              return res;
+            }
+            res.statusPagamento = data.data.status;
+            console.log({ res });
+            return res;
+          })
+        );
+      }
+    };
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   const renderPanel = () => {
@@ -26,9 +80,9 @@ function App() {
       case Screens.Itinerarios:
         return <Itinerarios filter={filter} />;
       case Screens.MinhasReservas:
-        return <MinhasReservas />;
+        return <MinhasReservas reservas={reservas} />;
       case Screens.InscrevaSe:
-        return <Promocoes />;
+        return <Promocoes promocoes={promocoes} />;
       default:
         return <Itinerarios filter={filter} />;
     }
